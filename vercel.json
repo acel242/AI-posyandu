@@ -1,29 +1,11 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "dashboard/package.json",
-      "use": "@vercel/static-build",
-      "config": { 
-        "distDir": "dist",
-        "buildCommand": "npm run build",
-        "installCommand": "npm install"
-      }
-    },
-    {
-      "src": "api/proxy.py",
-      "use": "@vercel/python"
-    }
-  ],
+  "buildCommand": "cd dashboard && npm install && npm run build",
+  "outputDirectory": "dashboard/dist",
+  "installCommand": "cd dashboard && npm install",
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/proxy.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/dashboard/dist/$1"
-    }
+    { "src": "/api/(.*)", "dest": "/api/proxy.py" },
+    { "src": "/(.*)", "dest": "/dashboard/dist/$1" }
   ],
   "env": {
     "BACKEND_URL": "http://43.157.235.76:5001"
