@@ -11,7 +11,7 @@ import classifier as clf
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-CJSIoKjjsr-v0NlC7P3IhQ")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://ai.sumopod.com/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "glm-4-7")
+MODEL_NAME = os.getenv("MODEL_NAME", "glm-5")
 
 AIDI_SYSTEM_PROMPT = """Anda adalah "Aidi", asisten kesehatan anak yang ramah dan hangat
 untuk Posyandu Patakbanteng, Desa Patakbanteng, Kecamatan Kejajar, Kabupaten Wonosobo,
@@ -371,7 +371,7 @@ class AidiAgent:
         if "tool_calls" in response:
             tool_call = response["tool_calls"][0]
             fn_name = tool_call["function"]["name"]
-            fn_args = json.loads(tool_call["function"]["arguments"]) if tool_call["function"]["arguments"] else {}
+            fn_args_raw = tool_call["function"]["arguments"]; fn_args = json.loads(fn_args_raw) if isinstance(fn_args_raw, str) else (fn_args_raw or {})
 
             tool_result = await self._execute_tool(fn_name, fn_args)
 
