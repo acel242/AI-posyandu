@@ -1,9 +1,12 @@
 {
   "builds": [
-    { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "dashboard/dist" } },
-    { "src": "api/handler/index.mjs", "use": "@vercel/node" }
+    {
+      "src": "dashboard/package.json",
+      "use": "@vercel/static-build"
+    }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/handler/index.mjs" }
+    { "src": "/api/(.*)", "dest": "/api/handler/index.mjs" },
+    { "src": "/(.*)", "dest": "/$1" }
   ]
 }
