@@ -1,5 +1,9 @@
 {
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/handler/index.mjs" }
+  "builds": [
+    { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "dashboard/dist" } },
+    { "src": "api/handler/index.mjs", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/handler/index.mjs" }
   ]
 }
