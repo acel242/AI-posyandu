@@ -1,15 +1,12 @@
 {
-  "builds": [
-    {
-      "src": "api/handler/index.mjs",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/proxy.py",
-      "use": "@vercel/python"
-    }
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/handler/index.mjs" },
+    { "source": "/(.*)", "destination": "/dashboard/dist/$1" }
   ],
-  "routes": [
-    { "src": "/(.*)", "dest": "/api/handler/index.mjs" }
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    }
   ]
 }

@@ -1,67 +1,39 @@
-// Vercel API handler — serves SPA + proxies /api/* to backend
-import { readFileSync } from 'fs'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const distRoot = join(__dirname, '..', '..', 'dashboard', 'dist')
-
-// Backend URL — override via BACKEND_URL env var
+// Vercel serverless function — proxies /api/* to backend tunnel
 const BACKEND_URL = process.env.BACKEND_URL || 'https://tear-deliver-yacht-option.trycloudflare.com'
 
 export default async function handler(req, res) {
   const url = new URL(req.url, 'http://localhost')
 
-  // ── API Proxy ───────────────────────────────────────────────
-  if (url.pathname.startsWith('/api/')) {
-    try {
-      const target = `${BACKEND_URL}${url.pathname}${url.search}`
-      console.log(`[proxy] ${req.method} → ${target}`)
-
-      const headers = {}
-      req.headers.forEach((v, k) => {
-        if (!['host','connection','transfer-encoding'].includes(k.toLowerCase()))
-          headers[k] = v
-      })
-
-      const bodyBuf = []
-      for await (const chunk of req) bodyBuf.push(chunk)
-
-      const resp = await fetch(target, {
-        method: req.method,
-        headers,
-        body: ['POST','PUT','PATCH'].includes(req.method) ? Buffer.concat(bodyBuf) : undefined,
-      })
-
-      const text = await resp.text()
-      res.status(resp.status)
-      res.set('Content-Type', 'application/json; charset=utf-8')
-      res.send(text)
-    } catch (err) {
-      console.error('[proxy] error:', err.message)
-      res.status(502).json({ error: 'Backend unreachable', detail: err.message })
+  try {
+    // Collect body for POST/PUT/PATCH  
+    let bodyData
+    if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+      const chunks = []
+      for await (const chunk of req) chunks.push(chunk)
+      bodyData = Buffer.concat(chunks)
     }
-    return
-  }
 
-  // ── Static Asset ────────────────────────────────────────────
-  if (url.pathname.includes('.')) {
-    const filePath = join(distRoot, url.pathname.slice(1))
-    try {
-      const content = readFileSync(filePath)
-      const ext = filePath.split('.').pop().toLowerCase()
-      const mime = {
-        js:'application/javascript; charset=utf-8', css:'text/css; charset=utf-8',
-        html:'text/html; charset=utf-8', json:'application/json; charset=utf-8',
-        png:'image/png', jpg:'image/jpeg', svg:'image/svg+xml',
-        woff:'font/woff', woff2:'font/woff2',
+    // Build headers — filter out hop-by-hop headers
+    const headers = {}
+    for (const [k, v] of Object.entries(req.headers)) {
+      const lk = k.toLowerCase()
+      if (!['host', 'connection', 'transfer-encoding'].includes(lk)) {
+        headers[k] = v
       }
-      res.set('Content-Type', mime[ext] || 'application/octet-stream')
-      return res.status(200).send(content)
-    } catch (_) { /* fall through */ }
-  }
+    }
 
-  // ── SPA Fallback ────────────────────────────────────────────
-  res.set('Content-Type', 'text/html; charset=utf-8')
-  return res.status(200).send(readFileSync(join(distRoot, 'index.html'), 'utf-8'))
+    const target = `${BACKEND_URL}${url.pathname}${url.search}`
+    
+    const resp = await fetch(target, {
+      method: req.method,
+      headers,
+      body: bodyData,
+    })
+
+    const text = await resp.text()
+    res.status(resp.status).setHeader('Content-Type', 'application/json; charset=utf-8').send(text)
+  } catch (err) {
+    console.error('[proxy]', err.message)
+    res.status(502).json({ error: 'Backend unreachable', detail: err.message })
+  }
 }
