@@ -128,7 +128,10 @@ async def cmd_batal(update: Update, context: CallbackContext):
         )
 
 
-async def cmd_sync(update: Update, context: CallbackContext):
+async def cmd_setrole(update: Update, context: CallbackContext):
+    """Forward to handlers.cmd_setrole — imported here to avoid circular imports."""
+    from handlers import cmd_setrole as setrole_handler
+    await setrole_handler(update, context)
     from sync import sync_all
     await update.message.reply_text("🔄 Menyinkronkan data...")
     result = await sync_all()
@@ -192,6 +195,7 @@ def main():
     app.add_handler(CommandHandler("bantuan", cmd_bantuan))
     app.add_handler(CommandHandler("stats", cmd_stats))
     app.add_handler(CommandHandler("batal", cmd_batal))
+    app.add_handler(CommandHandler("setrole", cmd_setrole))
     app.add_handler(registration_conv)
 
     # Fallback — must be added LAST so it doesn't intercept handled messages

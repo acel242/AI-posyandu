@@ -68,7 +68,7 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS kaders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                telegram_id TEXT UNIQUE NOT NULL,
+                telegram_id TEXT UNIQUE,
                 role TEXT DEFAULT 'kader'
             )
         """)
@@ -106,6 +106,22 @@ async def init_db():
                 failure_count INTEGER DEFAULT 0,
                 last_tested_at TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS alert_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                child_id INTEGER,
+                schedule_id INTEGER,
+                alert_type TEXT NOT NULL,
+                recipient_telegram_id TEXT NOT NULL,
+                message_text TEXT,
+                scheduled_time TEXT,
+                sent_time TEXT,
+                status TEXT DEFAULT 'pending',
+                error_message TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (child_id) REFERENCES children(id)
             )
         """)
         await db.commit()
@@ -438,3 +454,260 @@ async def add_posyandu(data: dict) -> int:
         """, (data["name"], data["location"], data["schedule_day"]))
         await db.commit()
         return cursor.lastrowid
+
+
+# ── Kader / Bidan ─────────────────────────────────────────────────────────────
+
+async def add_kader(data: dict) -> int:
+    """Register a new kader or bidan. Returns kader id."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("""
+            INSERT INTO kaders (name, telegram_id, role)
+            VALUES (?, ?, ?)
+        """, (
+            data["name"],
+            data.get("telegram_id"),
+            data.get("role", "kader"),
+        ))
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def get_all_kaders() -> list:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM kaders ORDER BY role, name ASC")
+        return [dict(r) for r in await cursor.fetchall()]
+
+
+async def get_kader_by_id(kader_id: int) -> Optional[dict]:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM kaders WHERE id = ?", (kader_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def get_kader_by_name(name: str) -> Optional[dict]:
+    """Find a kader by name (for /setrole verification). Case-insensitive partial match."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM kaders WHERE LOWER(name) = LOWER(?)",
+            (name,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def link_kader_telegram(kader_id: int, telegram_id: str) -> bool:
+    """Link a Telegram ID to an existing kader. Returns True if updated."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "UPDATE kaders SET telegram_id = ? WHERE id = ?",
+            (telegram_id, kader_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def unlink_kader_telegram(kader_id: int) -> bool:
+    """Unlink a Telegram ID from a kader (set to NULL)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "UPDATE kaders SET telegram_id = NULL WHERE id = ?",
+            (kader_id,),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def delete_kader(kader_id: int) -> bool:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("DELETE FROM kaders WHERE id = ?", (kader_id,))
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+# ── Alert Log ─────────────────────────────────────────────────────────────────
+
+async def add_alert_log(data: dict) -> int:
+    """Insert a new alert into the log. Returns the new alert id."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("""
+            INSERT INTO alert_log
+            (child_id, schedule_id, alert_type, recipient_telegram_id, message_text,
+             scheduled_time, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            data.get("child_id"),
+            data.get("schedule_id"),
+            data["alert_type"],
+            data["recipient_telegram_id"],
+            data.get("message_text", ""),
+            data.get("scheduled_time"),
+            data.get("status", "pending"),
+        ))
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def get_alert_logs(
+    child_id: int = None,
+    alert_type: str = None,
+    status: str = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list:
+    """Fetch alert log entries with optional filters."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        query = "SELECT * FROM alert_log WHERE 1=1"
+        params = []
+        if child_id is not None:
+            query += " AND child_id = ?"
+            params.append(child_id)
+        if alert_type:
+            query += " AND alert_type = ?"
+            params.append(alert_type)
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        cursor = await db.execute(query, params)
+        return [dict(r) for r in await cursor.fetchall()]
+
+
+async def get_pending_alerts(limit: int = 100) -> list:
+    """Get all pending alerts that haven't been sent yet."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM alert_log WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?",
+            (limit,),
+        )
+        return [dict(r) for r in await cursor.fetchall()]
+
+
+async def mark_alert_sent(alert_id: int, sent_time: str = None) -> None:
+    """Mark an alert as successfully sent."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            "UPDATE alert_log SET status = 'sent', sent_time = ? WHERE id = ?",
+            (sent_time, alert_id),
+        )
+        await db.commit()
+
+
+async def mark_alert_failed(alert_id: int, error_message: str) -> None:
+    """Mark an alert as failed with an error message."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            "UPDATE alert_log SET status = 'failed', error_message = ? WHERE id = ?",
+            (error_message, alert_id),
+        )
+        await db.commit()
+
+
+async def check_alert_already_sent(
+    child_id: int = None,
+    schedule_id: int = None,
+    alert_type: str = None,
+    recipient_telegram_id: str = None,
+    same_day: bool = True,
+) -> bool:
+    """Check if an alert of the same type was already sent to this recipient today.
+    For broadcast alerts use schedule_id; for child alerts use child_id.
+    Returns True if a duplicate alert exists."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+
+        # Build WHERE clause
+        if schedule_id is not None:
+            id_clause = "schedule_id = ?"
+            id_val = schedule_id
+        else:
+            id_clause = "child_id = ?"
+            id_val = child_id
+
+        if same_day:
+            cursor = await db.execute(
+                f"""SELECT id FROM alert_log
+                WHERE {id_clause} AND alert_type = ? AND recipient_telegram_id = ?
+                AND status = 'sent'
+                AND date(sent_time) = date('now')
+                LIMIT 1""",
+                (id_val, alert_type, recipient_telegram_id),
+            )
+        else:
+            cursor = await db.execute(
+                f"""SELECT id FROM alert_log
+                WHERE {id_clause} AND alert_type = ? AND recipient_telegram_id = ?
+                AND status = 'sent'
+                LIMIT 1""",
+                (id_val, alert_type, recipient_telegram_id),
+            )
+        row = await cursor.fetchone()
+        return row is not None
+
+
+async def get_alert_stats() -> dict:
+    """Return counts of sent, failed, and pending alerts."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        total = (await (await db.execute("SELECT COUNT(*) as c FROM alert_log")).fetchone())[0]
+        sent = (await (await db.execute("SELECT COUNT(*) as c FROM alert_log WHERE status='sent'")).fetchone())[0]
+        failed = (await (await db.execute("SELECT COUNT(*) as c FROM alert_log WHERE status='failed'")).fetchone())[0]
+        pending = (await (await db.execute("SELECT COUNT(*) as c FROM alert_log WHERE status='pending'")).fetchone())[0]
+        return {"total": total, "sent": sent, "failed": failed, "pending": pending}
+
+
+async def retry_alert(alert_id: int) -> bool:
+    """Reset a failed alert back to pending for retry."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "UPDATE alert_log SET status = 'pending', error_message = NULL WHERE id = ? AND status = 'failed'",
+            (alert_id,),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+# ── Telegram ID helpers ───────────────────────────────────────────────────────
+
+async def get_parent_telegram_ids() -> list:
+    """Get all parent telegram IDs from children table."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT DISTINCT parent_telegram_id FROM children WHERE parent_telegram_id IS NOT NULL"
+        )
+        rows = await cursor.fetchall()
+        return [r["parent_telegram_id"] for r in rows if r["parent_telegram_id"]]
+
+
+async def get_kader_telegram_ids(role: str = None) -> list:
+    """Get telegram_ids for all kader/bidan. Optionally filter by role."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        if role:
+            cursor = await db.execute(
+                "SELECT telegram_id FROM kaders WHERE telegram_id IS NOT NULL AND role = ?",
+                (role,),
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT telegram_id FROM kaders WHERE telegram_id IS NOT NULL"
+            )
+        rows = await cursor.fetchall()
+        return [r["telegram_id"] for r in rows if r["telegram_id"]]
+
+
+async def update_kader_telegram_id(kader_id: int, telegram_id: str) -> None:
+    """Update a kader's Telegram ID (for notification targeting)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            "UPDATE kaders SET telegram_id = ? WHERE id = ?",
+            (telegram_id, kader_id),
+        )
+        await db.commit()

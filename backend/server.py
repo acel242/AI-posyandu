@@ -6,13 +6,18 @@ from contextlib import asynccontextmanager
 import database as db
 import classifier as clf
 import agent as ag
+import scheduler as sc
 import os
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.init_db()
+    scheduler = sc.build_scheduler()
+    sc.start_scheduler(scheduler)
+    app.state.scheduler = scheduler
     yield
+    scheduler.shutdown(wait=True)
 
 app = FastAPI(title="Patyandu AI API", lifespan=lifespan)
 
@@ -113,6 +118,11 @@ async def create_health_record(child_id: int, request: Request):
     try:
         record_id = await db.add_health_record(record_data)
         await db.update_child_risk(child_id, classification["status"])
+
+        # Trigger risk alert if child is high-risk
+        if classification["status"] in ("yellow", "red"):
+            asyncio.create_task(sc.trigger_risiko_tinggi_alert(child_id))
+
         return {
             "success": True,
             "id": record_id,
@@ -186,6 +196,118 @@ async def delete_schedule(schedule_id: int):
     return {"success": ok}
 
 
+# ─── Kader / Bidan ──────────────────────────────────────────────────
+
+@app.get("/api/kaders")
+async def list_kaders():
+    """List all kader and bidan accounts."""
+    return await db.get_all_kaders()
+
+
+@app.get("/api/kaders/{kader_id}")
+async def get_kader(kader_id: int):
+    kader = await db.get_kader_by_id(kader_id)
+    if not kader:
+        return {"error": "Not found"}, 404
+    return kader
+
+
+@app.post("/api/kaders")
+async def create_kader(request: Request):
+    """Register a new kader or bidan. Body: {name, role, telegram_id?}"""
+    data = await request.json()
+    if not data.get("name"):
+        return {"error": "name is required"}, 400
+    try:
+        kid = await db.add_kader(data)
+        return {"success": True, "id": kid, "name": data["name"]}
+    except Exception as e:
+        return {"success": False, "error": str(e)}, 500
+
+
+@app.post("/api/kaders/{kader_id}/link")
+async def link_kader_telegram(kader_id: int, request: Request):
+    """Link a Telegram ID to a kader. Body: {telegram_id}"""
+    data = await request.json()
+    tid = data.get("telegram_id")
+    if not tid:
+        return {"error": "telegram_id required"}, 400
+    kader = await db.get_kader_by_id(kader_id)
+    if not kader:
+        return {"error": "Kader not found"}, 404
+    ok = await db.link_kader_telegram(kader_id, tid)
+    return {"success": ok, "kader_id": kader_id}
+
+
+@app.post("/api/kaders/{kader_id}/unlink")
+async def unlink_kader_telegram(kader_id: int):
+    """Unlink a Telegram ID from a kader."""
+    ok = await db.unlink_kader_telegram(kader_id)
+    return {"success": ok}
+
+
+@app.delete("/api/kaders/{kader_id}")
+async def remove_kader(kader_id: int):
+    ok = await db.delete_kader(kader_id)
+    return {"success": ok}
+
+
+# ─── Alerts ─────────────────────────────────────────────────────
+
+@app.get("/api/alerts/logs")
+async def get_alert_logs(
+    child_id: int = None,
+    alert_type: str = None,
+    status: str = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    """Get alert log entries with optional filters."""
+    return await db.get_alert_logs(
+        child_id=child_id,
+        alert_type=alert_type,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get("/api/alerts/pending")
+async def get_pending_alerts(limit: int = 100):
+    """Get pending alerts that haven't been sent yet."""
+    return await db.get_pending_alerts(limit=limit)
+
+
+@app.post("/api/alerts/retry/{alert_id}")
+async def retry_alert(alert_id: int):
+    """Reset a failed alert back to pending for retry."""
+    ok = await db.retry_alert(alert_id)
+    return {"success": ok, "alert_id": alert_id}
+
+
+@app.get("/api/alerts/stats")
+async def get_alert_stats():
+    """Get alert statistics."""
+    return await db.get_alert_stats()
+
+
+@app.post("/api/alerts/send")
+async def send_test_alert(request: Request):
+    """Manually trigger an alert for testing. Supply child_id + alert_type."""
+    data = await request.json()
+    child_id = data.get("child_id")
+    alert_type = data.get("alert_type")  # posyandu_reminder | belum_timbang | risiko_tinggi
+
+    if not child_id or not alert_type:
+        return {"success": False, "error": "child_id and alert_type required"}, 400
+
+    if alert_type == "risiko_tinggi":
+        await sc.trigger_risiko_tinggi_alert(child_id)
+        return {"success": True, "alert_type": alert_type, "child_id": child_id}
+    else:
+        return {"success": False, "error": "Manual send for this alert_type not yet implemented"}, 501
+
+
 # ─── Posyandu ───────────────────────────────────────────────────
 
 @app.get("/api/posyandu")
@@ -215,10 +337,21 @@ async def serve_index():
 
 @app.get("/dashboard/{path:path}")
 async def serve_dashboard(path: str):
+    if not path:
+        return RedirectResponse("/")
     file_path = os.path.join(STATIC_DIR, path)
-    if os.path.exists(file_path):
+    if os.path.isfile(file_path):
         return FileResponse(file_path)
     return RedirectResponse("/")
+
+# SPA catch-all — serve index.html for any non-API frontend route
+@app.get('/{path:path}')
+async def serve_spa(path: str):
+    """Serve the SPA for any path not matched above."""
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"error": "not found"}, 404
 
 @app.get("/static/{path:path}")
 async def serve_static(path: str):

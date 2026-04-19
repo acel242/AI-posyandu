@@ -1,106 +1,174 @@
 import { useState, useEffect } from 'react'
-import RiskBadge from '../components/RiskBadge'
+import Navbar from '../components/Navbar'
+import ChildTable from '../components/ChildTable'
+import ChildForm from '../components/ChildForm'
+import StatCard from '../components/StatCard'
+import WarningCard from '../components/WarningCard'
 
-export default function KaderDashboard({ user, onLogout }) {
+function formatDateIndonesian() {
+  const opts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
+  return new Date().toLocaleDateString('id-ID', opts)
+}
+
+export default function KaderDashboard({ user, onLogout, onBellClick }) {
   const [children, setChildren] = useState([])
-  const [stats, setStats] = useState({ total: 0, green: 0, yellow: 0, red: 0 })
+  const [stats, setStats] = useState({ total: 0, normal: 0, risk: 0, unmeasured: 0 })
+  const [alerts, setAlerts] = useState({ total: 0, sent: 0, failed: 0, pending: 0 })
   const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState('all') // all | normal | risk
+  const [showForm, setShowForm] = useState(false)
+  const [editChild, setEditChild] = useState(null)
 
   useEffect(() => {
-    fetch('/api/children')
-      .then(r => r.json())
-      .then(data => { setChildren(data); setLoading(false) })
-      .catch(() => setLoading(false))
-
-    fetch('/api/stats')
-      .then(r => r.json())
-      .then(setStats)
-      .catch(() => {})
+    loadData()
   }, [])
 
-  const cardStyle = (color) => ({
-    padding: '14px 12px',
-    borderRadius: 12,
-    background: color,
-    color: 'white',
-    textAlign: 'center',
-    flex: '1 1 80px',
-    minWidth: 80,
+  async function loadData() {
+    setLoading(true)
+    try {
+      const [childrenRes, statsRes, alertsRes] = await Promise.all([
+        fetch('/api/children'),
+        fetch('/api/stats'),
+        fetch('/api/alerts/stats'),
+      ])
+      const childrenData = await childrenRes.json()
+      const statsData = await statsRes.json()
+      const alertsData = await alertsRes.json()
+      setChildren(Array.isArray(childrenData) ? childrenData : [])
+      setStats(statsData)
+      setAlerts(alertsData)
+    } catch (err) {
+      console.error('Failed to load data:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleAddChild(formData) {
+    const res = await fetch('/api/children', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData),
+    })
+    const data = await res.json()
+    if (data.success || data.id) {
+      setShowForm(false)
+      loadData()
+    } else {
+      alert('Gagal menyimpan: ' + (data.error || 'Unknown error'))
+    }
+  }
+
+  async function handleDeleteChild(id) {
+    if (!confirm('Yakin hapus data anak ini?')) return
+    await fetch(`/api/children/${id}`, { method: 'DELETE' })
+    loadData()
+  }
+
+  function handleEditChild(child) {
+    setEditChild(child)
+    setShowForm(true)
+  }
+
+  function handleRowClick(child) {
+    setEditChild(child)
+    setShowForm(true)
+  }
+
+  const filteredChildren = children.filter(c => {
+    if (filter === 'normal') return c.risk_status === 'green'
+    if (filter === 'risk') return c.risk_status === 'red' || c.risk_status === 'yellow'
+    return true
   })
 
   return (
-    <div style={{ padding: '1rem', fontFamily: 'system-ui, sans-serif', maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-        <div>
-          <h1 style={{ margin: 0, color: '#1a3a2a', fontSize: 20 }}>Dashboard Kader</h1>
-          <p style={{ margin: '4px 0 0', color: '#666', fontSize: 13 }}>
-            Posyandu Patakbanteng — {user.username}
-          </p>
-        </div>
-        <button onClick={onLogout} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 14, padding: 0 }}>Keluar</button>
-      </div>
+    <div>
+      <Navbar
+        user={user}
+        alertFailedCount={alerts.failed || 0}
+        onBellClick={onBellClick}
+        onLogout={onLogout}
+      />
 
-      {/* Stats Cards */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
-        <div style={cardStyle('#22c55e')}>
-          <div style={{ fontSize: 28, fontWeight: 'bold' }}>{stats.green}</div>
-          <div style={{ fontSize: 13 }}>Normal 🟢</div>
-        </div>
-        <div style={cardStyle('#eab308')}>
-          <div style={{ fontSize: 28, fontWeight: 'bold' }}>{stats.yellow}</div>
-          <div style={{ fontSize: 13 }}>Risiko 🟡</div>
-        </div>
-        <div style={cardStyle('#ef4444')}>
-          <div style={{ fontSize: 28, fontWeight: 'bold' }}>{stats.red}</div>
-          <div style={{ fontSize: 13 }}>Buruk 🔴</div>
-        </div>
-        <div style={{ ...cardStyle('#3b82f6'), flex: 1 }}>
-          <div style={{ fontSize: 28, fontWeight: 'bold' }}>{stats.total}</div>
-          <div style={{ fontSize: 13 }}>Total Anak</div>
-        </div>
-      </div>
-
-      {/* Children Table */}
-      <div style={{ background: 'white', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.06)', overflowX: 'auto' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #eee' }}>
-          <h3 style={{ margin: 0 }}>Daftar Anak</h3>
-        </div>
-
-        {loading ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Memuat...</div>
-        ) : children.length === 0 ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
-            Belum ada data anak. Gunakan /daftar di Telegram Bot untuk mendaftarkan anak.
+      <div className="page">
+        <div className="page-content">
+          {/* Welcome */}
+          <div className="welcome-card">
+            <h2>Selamat Datang, {user?.username}</h2>
+            <p>{formatDateIndonesian()}</p>
           </div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-            <thead>
-              <tr style={{ background: '#f8fafc' }}>
-                <th style={{ padding: '10px 16px', textAlign: 'left', color: '#666', fontWeight: 500 }}>Nama</th>
-                <th style={{ padding: '10px 16px', textAlign: 'left', color: '#666', fontWeight: 500 }}>NIK</th>
-                <th style={{ padding: '10px 16px', textAlign: 'left', color: '#666', fontWeight: 500 }}>Orang Tua</th>
-                <th style={{ padding: '10px 16px', textAlign: 'center', color: '#666', fontWeight: 500 }}>Status</th>
-                <th style={{ padding: '10px 16px', textAlign: 'left', color: '#666', fontWeight: 500 }}>Terakhir Posyandu</th>
-              </tr>
-            </thead>
-            <tbody>
-              {children.map((child, i) => (
-                <tr key={child.id} style={{ borderTop: i > 0 ? '1px solid #f0f0f0' : 'none' }}>
-                  <td style={{ padding: '12px 16px' }}>{child.name}</td>
-                  <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontSize: 13 }}>{child.nik}</td>
-                  <td style={{ padding: '12px 16px' }}>{child.parent_name}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                    <RiskBadge status={child.risk_status} />
-                  </td>
-                  <td style={{ padding: '12px 16px', color: '#888', fontSize: 13 }}>
-                    {child.last_posyandu_date || '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+
+          {/* Warning: children >30 days unmeasured */}
+          <WarningCard count={stats.unmeasured || 0} />
+
+          {/* Stats */}
+          <div className="stats-grid">
+            <StatCard
+              icon="👶"
+              label="Total Anak"
+              value={stats.total || 0}
+              variant="total"
+            />
+            <StatCard
+              icon="✅"
+              label="Normal"
+              value={stats.normal || 0}
+              variant="normal"
+            />
+            <StatCard
+              icon="⚠️"
+              label="Berisiko"
+              value={(stats.risk || 0) + (stats.yellow || 0)}
+              variant="risk"
+            />
+          </div>
+
+          {/* Child Table */}
+          <div className="section-header">
+            <span className="section-title">📋 Data Anak</span>
+            <div className="filter-bar">
+              <button
+                className={`filter-chip ${filter === 'all' ? 'active' : ''}`}
+                onClick={() => setFilter('all')}
+              >Semua</button>
+              <button
+                className={`filter-chip ${filter === 'normal' ? 'active' : ''}`}
+                onClick={() => setFilter('normal')}
+              >Normal</button>
+              <button
+                className={`filter-chip ${filter === 'risk' ? 'active' : ''}`}
+                onClick={() => setFilter('risk')}
+              >Berisiko</button>
+            </div>
+          </div>
+
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+              Memuat data...
+            </div>
+          ) : (
+            <ChildTable
+              children={filteredChildren}
+              onRowClick={handleRowClick}
+              onDelete={handleDeleteChild}
+            />
+          )}
+        </div>
       </div>
+
+      {/* FAB */}
+      <button className="fab" onClick={() => { setEditChild(null); setShowForm(true) }} title="Tambah Anak">
+        +
+      </button>
+
+      {/* Child Form Modal */}
+      {showForm && (
+        <ChildForm
+          child={editChild}
+          onSave={handleAddChild}
+          onClose={() => { setShowForm(false); setEditChild(null) }}
+        />
+      )}
     </div>
   )
 }
