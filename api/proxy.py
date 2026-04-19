@@ -11,7 +11,7 @@ import urllib.error
 
 app = Flask(__name__)
 
-BACKEND_URL = os.environ.get("BACKEND_URL", "http://43.157.235.76:5001")
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:5001")
 
 ALLOWED_PREFIXES = [
     "/api/health",
