@@ -52,3 +52,4 @@ npm run dev
 - 🟢 **Hijau (Normal)**: >= -1 SD
 - 🟡 **Kuning (Risiko)**: -3 SD to < -1 SD → home visit within 7 days
 - 🔴 **Merah (Berat)**: < -3 SD → immediate referral to Puskesmas
+# trigger rebuild
