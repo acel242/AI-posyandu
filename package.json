@@ -1,0 +1,9 @@
+{
+  "name": "ai-posyandu",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "cd dashboard && npm install && npm run build",
+    "dev": "node handler.mjs"
+  }
+}

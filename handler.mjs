@@ -3,8 +3,7 @@ import { join, extname, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const ROOT = __dirname
-const DIST = join(ROOT, 'dashboard', 'dist')
+const DIST = join(__dirname, 'dist')
 const BACKEND_URL = process.env.BACKEND_URL || 'https://tear-deliver-yacht-option.trycloudflare.com'
 
 const MIME = {
@@ -35,8 +34,7 @@ export default async function handler(req, res) {
           !['host','connection','transfer-encoding'].includes(k.toLowerCase())
         )
       )
-      const query = url.search
-      const resp = await fetch(`${BACKEND_URL}${pathname}${query}`, { method: req.method, headers, body })
+      const resp = await fetch(`${BACKEND_URL}${pathname}${url.search}`, { method: req.method, headers, body })
       const text = await resp.text()
       return res.status(resp.status).setHeader('Content-Type', 'application/json').send(text)
     } catch (e) {
