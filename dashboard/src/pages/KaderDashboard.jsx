@@ -11,6 +11,7 @@ function formatDateIndonesian() {
 }
 
 export default function KaderDashboard({ user, onLogout, onBellClick }) {
+  const navigate = useNavigate()
   const [children, setChildren] = useState([])
   const [stats, setStats] = useState({ total: 0, normal: 0, risk: 0, unmeasured: 0 })
   const [alerts, setAlerts] = useState({ total: 0, sent: 0, failed: 0, pending: 0 })
@@ -151,6 +152,7 @@ export default function KaderDashboard({ user, onLogout, onBellClick }) {
               children={filteredChildren}
               onRowClick={handleRowClick}
               onDelete={handleDeleteChild}
+              onChartClick={child => navigate(`/child/${child.id}`)}
             />
           )}
         </div>

@@ -41,6 +41,18 @@ async def init_db():
                 FOREIGN KEY (child_id) REFERENCES children(id)
             )
         """)
+        # Migration: add WHO z-score columns to health_records
+        for col, coltype in [
+            ('z_score_wfa', 'REAL'),
+            ('z_score_hfa', 'REAL'),
+            ('z_score_wfh', 'REAL'),
+            ('age_months', 'REAL'),
+            ('overall_status', 'TEXT'),
+        ]:
+            try:
+                await db.execute(f'ALTER TABLE health_records ADD COLUMN {col} {coltype}')
+            except Exception:
+                pass
         await db.execute("""
             CREATE TABLE IF NOT EXISTS posyandu (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -180,13 +192,16 @@ async def add_health_record(data: dict) -> int:
         cursor = await db.execute("""
             INSERT INTO health_records
             (child_id, date, weight_kg, height_cm, bb_tb_status, vitamin_a,
-             immunization_status, notes, recorded_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             immunization_status, notes, recorded_by, z_score_wfa, z_score_hfa,
+             z_score_wfh, age_months, overall_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             data['child_id'], data['date'], data['weight_kg'], data['height_cm'],
             data['bb_tb_status'], int(data.get('vitamin_a', False)),
             data.get('immunization_status', 'complete'), data.get('notes', ''),
-            data.get('recorded_by')
+            data.get('recorded_by'),
+            data.get('z_score_wfa'), data.get('z_score_hfa'), data.get('z_score_wfh'),
+            data.get('age_months'), data.get('overall_status')
         ))
         await db.commit()
         await db.execute(
@@ -206,6 +221,52 @@ async def get_health_records(child_id: int) -> list:
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+
+async def get_child_measurements(child_id: int) -> list:
+    """Get measurements for a child with WHO z-scores and age_months calculated."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        # Get child's DOB and gender
+        cur = await db.execute("SELECT date_of_birth, gender FROM children WHERE id = ?", (child_id,))
+        child_row = await cur.fetchone()
+        if not child_row:
+            return []
+        dob = child_row['date_of_birth']
+        gender = child_row['gender']
+        
+        cursor = await db.execute(
+            "SELECT * FROM health_records WHERE child_id = ? ORDER BY date ASC",
+            (child_id,)
+        )
+        rows = await cursor.fetchall()
+        measurements = []
+        for row in rows:
+            m = dict(row)
+            # Calculate age_months from DOB
+            from datetime import datetime
+            dob_dt = datetime.strptime(dob, '%Y-%m-%d')
+            if m.get('date') and m['date'].strip():
+                mdate = datetime.strptime(m['date'], '%Y-%m-%d')
+                age_months = (mdate - dob_dt).days / 30.436875
+                m['age_months'] = round(age_months, 1)
+            else:
+                m['age_months'] = None
+            
+            # Import WHO functions inline to avoid circular deps
+            from who_anthro import (
+                calc_zscore_weight_for_age, calc_zscore_height_for_age,
+                calc_zscore_weight_for_height, classify_overall
+            )
+            w = m.get('weight_kg')
+            h = m.get('height_cm')
+            am = m.get('age_months')
+            m['z_score_wfa'] = calc_zscore_weight_for_age(w, am, gender) if w and am else None
+            m['z_score_hfa'] = calc_zscore_height_for_age(h, am, gender) if h and am else None
+            m['z_score_wfh'] = calc_zscore_weight_for_height(w, h, gender) if w and h else None
+            m['overall_status'] = classify_overall(w, h, am, gender)
+            measurements.append(m)
+        return measurements
 
 
 async def save_conversation(telegram_id: str, child_id: Optional[int],

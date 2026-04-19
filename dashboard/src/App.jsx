@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import KaderDashboard from './pages/KaderDashboard'
 import BidanDashboard from './pages/BidanDashboard'
 import KadesDashboard from './pages/KadesDashboard'
+import ChildDetail from './pages/ChildDetail'
 import AlertPanel from './components/AlertPanel'
 
 function ProtectedRoute({ role, allowedRole, children }) {

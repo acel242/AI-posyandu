@@ -155,9 +155,25 @@ async def echo_handler(update: Update, context: CallbackContext):
         if resp.status_code == 200:
             data = resp.json()
             reply = data.get("response", "").strip()
-            if reply:
-                await update.message.reply_text(reply[:4096])
+            if not reply:
+                await update.message.reply_text("Maaf, saya tidak mengerti. Ketik /bantuan untuk bantuan.")
                 return
+            # Check for embedded chart
+            if "[CHART_BASE64]" in reply:
+                import base64, io
+                start = reply.index("[CHART_BASE64]") + len("[CHART_BASE64]")
+                end = reply.index("[/CHART_BASE64]")
+                chart_b64 = reply[start:end]
+                chart_bytes = base64.b64decode(chart_b64)
+                text_before = reply[:reply.index("[CHART_BASE64]")].strip()
+                text_after = reply[end + len("[/CHART_BASE64]"):].strip()
+                msg_parts = [p.strip() for p in [text_before, text_after] if p.strip()]
+                for i, part in enumerate(msg_parts):
+                    await update.message.reply_text(part[:4096])
+                await update.message.reply_photo(photo=io.BytesIO(chart_bytes), filename="growth_chart.png")
+                return
+            await update.message.reply_text(reply[:4096])
+            return
         # Fallback if API is down
         await update.message.reply_text(
             "Ayo istirahat dulu sebentar, ya! "

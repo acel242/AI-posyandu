@@ -7,6 +7,8 @@ import database as db
 import classifier as clf
 import agent as ag
 import scheduler as sc
+import chart_generator as cg
+import who_anthro as who
 import os
 
 
@@ -88,48 +90,131 @@ async def create_child(request: Request):
 
 @app.post("/api/children/{child_id}/health-record")
 async def create_health_record(child_id: int, request: Request):
-    """Add a health record with automatic BB/TB risk classification."""
+    """Add a health record with automatic WHO z-score classification."""
     data = await request.json()
 
-    # Calculate age from date_of_birth if provided
-    age_months = data.get("age_months", 24)  # default 24 months
+    # Get child's DOB and gender from DB
+    child = await db.get_child_by_id(child_id)
+    if not child:
+        return {"success": False, "error": "Child not found"}, 404
 
-    # Classify risk
+    dob = child["date_of_birth"]
+    gender = child["gender"]
+
+    # Calculate age in months from DOB + measurement date
+    from datetime import datetime
+    mdate = data.get("date", datetime.now().strftime("%Y-%m-%d"))
+    dob_dt = datetime.strptime(dob, "%Y-%m-%d")
+    mdate_dt = datetime.strptime(mdate[:10], "%Y-%m-%d")
+    age_months = (mdate_dt - dob_dt).days / 30.436875
+
+    weight_kg = float(data["weight_kg"])
+    height_cm = float(data["height_cm"])
+
+    # WHO z-score calculation
+    z_wfa = who.calc_zscore_weight_for_age(weight_kg, age_months, gender)
+    z_hfa = who.calc_zscore_height_for_age(height_cm, age_months, gender)
+    z_wfh = who.calc_zscore_weight_for_height(weight_kg, height_cm, gender)
+    overall = who.classify_overall(weight_kg, height_cm, age_months, gender)
+
+    # Also run old classifier for bb_tb_status
     classification = clf.classify_bb_tb(
         age_months=age_months,
-        gender=data.get("gender", "L"),
-        weight_kg=data["weight_kg"],
-        height_cm=data["height_cm"],
+        gender=gender,
+        weight_kg=weight_kg,
+        height_cm=height_cm,
     )
 
-    # Add classification result to record
     record_data = {
         "child_id": child_id,
-        "date": data.get("date", ""),
-        "weight_kg": data["weight_kg"],
-        "height_cm": data["height_cm"],
-        "bb_tb_status": classification["status"],
+        "date": mdate[:10],
+        "weight_kg": weight_kg,
+        "height_cm": height_cm,
+        "bb_tb_status": classification["status"],  # keep old classifier for compatibility
         "vitamin_a": data.get("vitamin_a", False),
         "immunization_status": data.get("immunization_status", "complete"),
         "notes": data.get("notes", ""),
         "recorded_by": data.get("recorded_by"),
+        "z_score_wfa": z_wfa,
+        "z_score_hfa": z_hfa,
+        "z_score_wfh": z_wfh,
+        "age_months": round(age_months, 1),
+        "overall_status": overall,
     }
 
     try:
         record_id = await db.add_health_record(record_data)
-        await db.update_child_risk(child_id, classification["status"])
+        await db.update_child_risk(child_id, overall)
 
         # Trigger risk alert if child is high-risk
-        if classification["status"] in ("yellow", "red"):
+        if overall in ("yellow", "red"):
             asyncio.create_task(sc.trigger_risiko_tinggi_alert(child_id))
 
         return {
             "success": True,
             "id": record_id,
-            "classification": classification,
+            "z_score_wfa": z_wfa,
+            "z_score_hfa": z_hfa,
+            "z_score_wfh": z_wfh,
+            "overall_status": overall,
+            "bb_tb_status": classification["status"],
         }
     except Exception as e:
         return {"success": False, "error": str(e)}, 500
+
+
+# ─── Growth Chart ──────────────────────────────────────────────
+
+@app.get("/api/children/{child_id}/measurements")
+async def get_measurements(child_id: int):
+    """Get all measurements for a child with WHO z-scores."""
+    child = await db.get_child_by_id(child_id)
+    if not child:
+        return {"error": "Child not found"}, 404
+    measurements = await db.get_child_measurements(child_id)
+    return {
+        "child": child,
+        "measurements": measurements,
+    }
+
+
+@app.get("/api/children/{child_id}/growth-chart.png")
+async def get_growth_chart_png(child_id: int, chart_type: str = "wfa"):
+    """Generate and return a growth chart PNG."""
+    child = await db.get_child_by_id(child_id)
+    if not child:
+        return {"error": "Child not found"}, 404
+    
+    measurements = await db.get_child_measurements(child_id)
+    if not measurements:
+        return {"error": "No measurements yet"}, 404
+    
+    try:
+        png_data = cg.generate_growth_chart_png(
+            child_name=child["name"],
+            gender=child["gender"],
+            measurements=measurements,
+            chart_type=chart_type,
+        )
+        from fastapi.responses import Response
+        return Response(content=png_data, media_type="image/png")
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@app.get("/api/children/{child_id}/growth-summary")
+async def get_growth_summary(child_id: int):
+    """Get a text summary of growth for Telegram display."""
+    child = await db.get_child_by_id(child_id)
+    if not child:
+        return {"error": "Child not found"}, 404
+    
+    measurements = await db.get_child_measurements(child_id)
+    if not measurements:
+        return {"summary": f"{child["name"]}: Belum ada data pengukuran."}
+    
+    summary = cg.generate_measurement_summary(measurements, child["name"], child["gender"])
+    return {"summary": summary, "child": child, "measurements": measurements}
 
 
 # ─── AI Agent ───────────────────────────────────────────────────

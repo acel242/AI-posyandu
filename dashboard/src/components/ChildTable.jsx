@@ -12,7 +12,7 @@ function calcAge(birthDate) {
   return rem > 0 ? `${years} thn ${rem} bln` : `${years} thn`
 }
 
-export default function ChildTable({ children, onRowClick, onDelete }) {
+export default function ChildTable({ children, onRowClick, onDelete, onChartClick }) {
   if (children.length === 0) {
     return (
       <div className="table-wrap" style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
@@ -48,7 +48,14 @@ export default function ChildTable({ children, onRowClick, onDelete }) {
                     className="btn btn-sm btn-secondary"
                     onClick={() => onRowClick(child)}
                     style={{ marginRight: 6 }}
-                  >Edit</button>
+                  >Detail</button>
+                  {onChartClick && (
+                    <button
+                      className="btn btn-sm btn-secondary"
+                      onClick={() => onChartClick(child)}
+                      style={{ marginRight: 6, background: '#1565C0', color: '#fff' }}
+                    >Chart</button>
+                  )}
                   {onDelete && (
                     <button
                       className="btn btn-sm btn-danger"

@@ -29,6 +29,7 @@ Kemampuan Anda (via tools):
 - list_schedules: Melihat jadwal yang ada
 - list_children: Melihat daftar anak terdaftar
 - get_child: Melihat detail satu anak
+- get_growth_chart: Generate growth chart PNG for Telegram display
 - classify_child: Klasifikasi status gizi BB/TB WHO
 - get_stats: Melihat statistik keseluruhan (total anak, risiko, dll)
 - list_posyandu: Melihat daftar Posyandu
@@ -104,6 +105,20 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "nik": {"type": "string", "description": "NIK anak"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_growth_chart",
+            "description": "Generate growth chart PNG for Telegram. Returns chart as base64 PNG.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "nik": {"type": "string", "description": "NIK of the child"},
+                    "chart_type": {"type": "string", "enum": ["wfa", "hfa"], "default": "wfa"}
                 }
             }
         }
@@ -245,6 +260,27 @@ class AidiAgent:
         except Exception as e:
             return f"Gagal mengambil data anak: {e}"
 
+    async def _exec_get_growth_chart(self, args: dict) -> str:
+        try:
+            nik = args.get("nik")
+            chart_type = args.get("chart_type", "wfa")
+            child = await db.get_child_by_nik(nik) if nik else None
+            if not child:
+                return f"Tidak ditemukan anak dengan NIK {nik}."
+            meas = await db.get_child_measurements(child["id"])
+            if not meas:
+                return f"Belum ada data pengukuran untuk {child['name']}."
+            import chart_generator as cg
+            png_data = cg.generate_growth_chart_png(
+                child["name"], child["gender"], meas, chart_type
+            )
+            import base64
+            b64 = base64.b64encode(png_data).decode()
+            return f"[CHART_BASE64]{b64}[/CHART_BASE64]"
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            return f"Gagal membuat growth chart: {e}"
+
     async def _exec_get_child(self, args: dict) -> str:
         try:
             nik = args.get("nik")
@@ -337,6 +373,7 @@ class AidiAgent:
             "list_schedules": self._exec_list_schedules,
             "list_children": self._exec_list_children,
             "get_child": self._exec_get_child,
+            "get_growth_chart": self._exec_get_growth_chart,
             "classify_child": self._exec_classify_child,
             "get_stats": self._exec_get_stats,
             "list_posyandu": self._exec_list_posyandu,
