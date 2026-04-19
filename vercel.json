@@ -12,6 +12,7 @@
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/proxy.py" },
-    { "src": "/(.*)", "dest": "/dashboard/dist/$1" }
+    { "src": "/assets/(.*)", "dest": "/dashboard/dist/assets/$1" },
+    { "src": "/(.*)", "dest": "/dashboard/dist/index.html" }
   ]
 }
