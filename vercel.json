@@ -1,8 +1,5 @@
 {
   "builds": [
-    { "src": "api/handler/index.mjs", "use": "@vercel/node" }
-  ],
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/api/handler/index.mjs" }
+    { "src": "handler.mjs", "use": "@vercel/node" }
   ]
 }
