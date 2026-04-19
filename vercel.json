@@ -3,16 +3,12 @@
     {
       "src": "api/proxy.py",
       "use": "@vercel/python"
-    },
-    {
-      "src": "dashboard/dist/**",
-      "use": "@vercel/static"
     }
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/proxy.py" },
     { "src": "/assets/(.*)", "dest": "/dashboard/dist/assets/$1" },
     { "src": "/", "dest": "/dashboard/dist/index.html" },
-    { "src": "/(.*)", "dest": "/$1" }
+    { "src": "/(.*)", "dest": "/dashboard/dist/$1" }
   ]
 }
