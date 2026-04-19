@@ -1,14 +1,15 @@
 {
   "builds": [
     {
+      "src": "api/handler/index.mjs",
+      "use": "@vercel/node"
+    },
+    {
       "src": "api/proxy.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/proxy.py" },
-    { "src": "/assets/(.*)", "dest": "/dashboard/dist/assets/$1" },
-    { "src": "/", "dest": "/dashboard/dist/index.html" },
-    { "src": "/(.*)", "dest": "/dashboard/dist/$1" }
+    { "src": "/(.*)", "dest": "/api/handler/index.mjs" }
   ]
 }
