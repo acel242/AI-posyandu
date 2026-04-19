@@ -1,39 +1,75 @@
-// Vercel serverless function — proxies /api/* to backend tunnel
+// Single entry point: serves SPA + proxies /api/*
+import { readFileSync } from 'fs'
+import { join, extname, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const ROOT = join(__dirname, '..', '..')
+const DIST = join(ROOT, 'dashboard', 'dist')
+
 const BACKEND_URL = process.env.BACKEND_URL || 'https://tear-deliver-yacht-option.trycloudflare.com'
 
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+}
+
 export default async function handler(req, res) {
-  const url = new URL(req.url, 'http://localhost')
+  const pathname = new URL(req.url).pathname
 
-  try {
-    // Collect body for POST/PUT/PATCH  
-    let bodyData
-    if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
-      const chunks = []
-      for await (const chunk of req) chunks.push(chunk)
-      bodyData = Buffer.concat(chunks)
-    }
-
-    // Build headers — filter out hop-by-hop headers
-    const headers = {}
-    for (const [k, v] of Object.entries(req.headers)) {
-      const lk = k.toLowerCase()
-      if (!['host', 'connection', 'transfer-encoding'].includes(lk)) {
-        headers[k] = v
+  // ── API Proxy ───────────────────────────────────────────────
+  if (pathname.startsWith('/api/')) {
+    try {
+      let body
+      if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+        const chunks = []
+        for await (const chunk of req) chunks.push(chunk)
+        body = Buffer.concat(chunks)
       }
+
+      const headers = {}
+      for (const [k, v] of Object.entries(req.headers)) {
+        const lk = k.toLowerCase()
+        if (!['host', 'connection', 'transfer-encoding'].includes(lk)) {
+          headers[k] = v
+        }
+      }
+
+      const target = `${BACKEND_URL}${pathname}${req.url.includes('?') ? '?' + req.url.split('?', 2)[1] : ''}`
+      const resp = await fetch(target, { method: req.method, headers, body })
+      const text = await resp.text()
+      return res.status(resp.status).setHeader('Content-Type', 'application/json').send(text)
+    } catch (e) {
+      console.error('[proxy]', e.message)
+      return res.status(502).json({ error: 'Backend unreachable' })
     }
+  }
 
-    const target = `${BACKEND_URL}${url.pathname}${url.search}`
-    
-    const resp = await fetch(target, {
-      method: req.method,
-      headers,
-      body: bodyData,
-    })
+  // ── Static Asset ────────────────────────────────────────────
+  const ext = extname(pathname)
+  if (ext && MIME_TYPES[ext]) {
+    try {
+      const filePath = join(DIST, pathname.slice(1))
+      const content = readFileSync(filePath)
+      res.setHeader('Content-Type', MIME_TYPES[ext])
+      return res.status(200).send(content)
+    } catch (_) { /* fall through to SPA fallback */ }
+  }
 
-    const text = await resp.text()
-    res.status(resp.status).setHeader('Content-Type', 'application/json; charset=utf-8').send(text)
-  } catch (err) {
-    console.error('[proxy]', err.message)
-    res.status(502).json({ error: 'Backend unreachable', detail: err.message })
+  // ── SPA Fallback ────────────────────────────────────────────
+  try {
+    const html = readFileSync(join(DIST, 'index.html'), 'utf-8')
+    res.setHeader('Content-Type', 'text/html; charset=utf-8')
+    return res.status(200).send(html)
+  } catch (e) {
+    return res.status(500).send(`Static files not found: ${DIST}\n${e.message}`)
   }
 }
