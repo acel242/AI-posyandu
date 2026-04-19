@@ -6,18 +6,12 @@
       "use": "@vercel/python"
     },
     {
-      "src": "dashboard/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
+      "src": "dashboard/dist/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/proxy.py" },
-    { "src": "/(.*)", "dest": "/dashboard/$1" }
-  ],
-  "env": {
-    "BACKEND_URL": "http://43.157.235.76:5001"
-  }
+    { "src": "/(.*)", "dest": "/dashboard/dist/$1" }
+  ]
 }
