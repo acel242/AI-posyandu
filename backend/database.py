@@ -4,7 +4,9 @@ from datetime import date, datetime
 from typing import Optional
 
 # Absolute path so backend and bot both write to the same file
-DATABASE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "posyandu.db")
+# Use /data volume on Railway, local fallback elsewhere
+DATA_DIR = os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
+DATABASE_PATH = os.path.join(DATA_DIR, "posyandu.db")
 
 
 async def init_db():
