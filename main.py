@@ -1,10 +1,5 @@
-# Railway entry point for backend service
+"""Railway entry point — starts the FastAPI server."""
 import uvicorn, os
 
-if __name__ == "__main__":
-    uvicorn.run(
-        "server:app",
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", 8000)),
-        reload=False,
-    )
+PORT = int(os.environ.get("PORT", 8000))
+uvicorn.run("server:app", host="0.0.0.0", port=PORT, reload=False)
