@@ -3,7 +3,7 @@ import { join, extname, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const DIST = join(__dirname, 'dist')
+const DIST = join(__dirname, 'dashboard', 'dist')
 const BACKEND_URL = process.env.BACKEND_URL || 'https://hanging-beats-staff-ftp.trycloudflare.com'
 
 const MIME = {
