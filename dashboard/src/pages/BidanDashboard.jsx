@@ -1,17 +1,42 @@
 import { useState, useEffect } from 'react'
-import Navbar from '../components/Navbar'
+import Sidebar from '../components/Sidebar'
 import RiskBadge from '../components/RiskBadge'
-import AlertBadge from '../components/AlertBadge'
 import AlertPanel from '../components/AlertPanel'
 import ChildTable from '../components/ChildTable'
 import ChildForm from '../components/ChildForm'
 
-function formatDateIndonesian() {
-  const opts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
-  return new Date().toLocaleDateString('id-ID', opts)
+function StatBox({ icon, label, value, color = '#1B5E20' }) {
+  return (
+    <div style={{
+      background: 'white',
+      borderRadius: 16,
+      padding: '18px 22px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 14,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+      flex: 1,
+      minWidth: 140,
+    }}>
+      <div style={{
+        width: 48, height: 48,
+        borderRadius: 12,
+        background: color + '18',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '1.3rem',
+        flexShrink: 0,
+      }}>
+        {icon}
+      </div>
+      <div>
+        <div style={{ fontSize: '0.72rem', color: '#7F8C8D', marginBottom: 2, fontWeight: 500 }}>{label}</div>
+        <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#2C3E50', lineHeight: 1 }}>{value}</div>
+      </div>
+    </div>
+  )
 }
 
-export default function BidanDashboard({ user, onLogout, onBellClick }) {
+export default function BidanDashboard({ user, onLogout }) {
   const [children, setChildren] = useState([])
   const [stats, setStats] = useState({ total: 0, green: 0, yellow: 0, red: 0, unmeasured: 0 })
   const [loading, setLoading] = useState(true)
@@ -20,14 +45,17 @@ export default function BidanDashboard({ user, onLogout, onBellClick }) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [alertLoading, setAlertLoading] = useState(false)
   const [selectedChild, setSelectedChild] = useState(null)
-  const [formData, setFormData] = useState({ weight_kg: '', height_cm: '', age_months: '', notes: '' })
+  const [formData, setFormData] = useState({ weight_kg: '', height_cm: '', notes: '' })
   const [submitting, setSubmitting] = useState(false)
   const [submitMsg, setSubmitMsg] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [editChild, setEditChild] = useState(null)
   const [filter, setFilter] = useState('all')
+  const [activeNav, setActiveNav] = useState('/')
 
-  const loadData = () => {
+  useEffect(() => { loadData() }, [])
+
+  function loadData() {
     setLoading(true)
     Promise.all([
       fetch('/api/children').then(r => r.json()),
@@ -40,8 +68,6 @@ export default function BidanDashboard({ user, onLogout, onBellClick }) {
       })
       .catch(() => setLoading(false))
   }
-
-  useEffect(() => { loadData() }, [])
 
   useEffect(() => {
     if (!panelOpen) return
@@ -92,11 +118,11 @@ export default function BidanDashboard({ user, onLogout, onBellClick }) {
         body: JSON.stringify(payload),
       })
       const result = await res.json()
-      if (result.success) {
-        const { status, category, z_score } = result.classification
-        setSubmitMsg({ ok: true, text: `${child.name}: ${category} (z=${z_score})` })
+      if (result.success || result.id) {
+        const { status, category, z_score } = result.classification || {}
+        setSubmitMsg({ ok: true, text: `${child.name}: ${category || status} (z=${z_score || 'n/a'})` })
         setSelectedChild(null)
-        setFormData({ weight_kg: '', height_cm: '', age_months: '', notes: '' })
+        setFormData({ weight_kg: '', height_cm: '', notes: '' })
         loadData()
       } else {
         setSubmitMsg({ ok: false, text: result.error || 'Gagal menyimpan' })
@@ -107,10 +133,8 @@ export default function BidanDashboard({ user, onLogout, onBellClick }) {
     setSubmitting(false)
   }
 
-  const unmeasuredCases = children.filter(c => c.risk_status === 'unmeasured')
   const redCases = children.filter(c => c.risk_status === 'red')
   const yellowCases = children.filter(c => c.risk_status === 'yellow')
-
   const filteredChildren = children.filter(c => {
     if (filter === 'normal') return c.risk_status === 'green'
     if (filter === 'risk') return c.risk_status === 'red' || c.risk_status === 'yellow'
@@ -118,75 +142,92 @@ export default function BidanDashboard({ user, onLogout, onBellClick }) {
   })
 
   return (
-    <div>
-      <Navbar
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#F5F6FA' }}>
+      <Sidebar
         user={user}
-        alertFailedCount={alertStats.failed || 0}
-        onBellClick={() => setPanelOpen(true)}
+        activePath={activeNav}
+        onNavigate={p => setActiveNav(p)}
         onLogout={onLogout}
+        alertFailedCount={alertStats.failed || 0}
       />
 
-      <div className="page">
-        <div className="page-content">
-          {/* Welcome */}
-          <div className="welcome-card">
-            <h2>Selamat Datang, {user?.username}</h2>
-            <p>{formatDateIndonesian()}</p>
+      <div style={{ flex: 1, marginLeft: 240 }}>
+        {/* Header */}
+        <div style={{
+          background: 'white',
+          borderBottom: '1px solid #E0E4E8',
+          padding: '0 28px',
+          height: 64,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <div>
+            <h1 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#2C3E50' }}>🏥 Dashboard Bidan</h1>
+            <p style={{ fontSize: '0.75rem', color: '#7F8C8D' }}>
+              {new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </p>
           </div>
+          <button onClick={() => setShowForm(true)} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '8px 18px', borderRadius: 10, border: 'none',
+            background: '#1B5E20', fontSize: '0.85rem', fontWeight: 600,
+            cursor: 'pointer', color: 'white',
+          }}>+ Tambah Anak</button>
+        </div>
 
-          {/* Unmeasured warning */}
-          {unmeasuredCases.length > 0 && (
-            <div className="warning-card">
-              <span className="icon">⚠️</span>
-              <span><strong>{unmeasuredCases.length} anak</strong> belum ditimbang lebih dari 30 hari</span>
-            </div>
-          )}
-
-          {/* Stats */}
-          <div className="stats-grid">
-            <div className="stat-card">
-              <div className="stat-icon total">👶</div>
-              <div><div className="stat-label">Total Anak</div><div className="stat-value">{stats.total || 0}</div></div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-icon normal">🟢</div>
-              <div><div className="stat-label">Normal</div><div className="stat-value">{stats.green || 0}</div></div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-icon" style={{background:'#FEF3C7'}}>🟡</div>
-              <div><div className="stat-label">Risiko</div><div className="stat-value">{yellowCases.length}</div></div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-icon risk">🔴</div>
-              <div><div className="stat-label">Rujuk</div><div className="stat-value">{redCases.length}</div></div>
-            </div>
+        {/* Content */}
+        <div style={{ padding: '24px 28px' }}>
+          {/* Welcome */}
+          <div style={{
+            background: 'linear-gradient(135deg, #1B5E20 0%, #2E7D32 60%, #388E3C 100%)',
+            borderRadius: 20, padding: '22px 28px', color: 'white', marginBottom: 20,
+          }}>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: 4 }}>
+              Selamat Datang, {user?.username || 'Bidan'} 👋
+            </h2>
+            <p style={{ opacity: 0.85, fontSize: '0.875rem' }}>
+              {stats.total > 0
+                ? `${stats.total} anak terdaftar · ${redCases.length} rujuk · ${yellowCases.length} risiko`
+                : 'Belum ada data anak'}
+            </p>
           </div>
 
           {/* Measurement Form */}
           {selectedChild && (
-            <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #27AE60', background: '#F0FDF4' }}>
+            <div style={{
+              background: 'white', borderRadius: 16, padding: 20, marginBottom: 20,
+              borderLeft: '4px solid #27AE60',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+            }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <h3 style={{ margin: 0, fontSize: '1rem', color: '#166534' }}>📏 Input Pengukuran — {selectedChild.name}</h3>
+                <h3 style={{ margin: 0, fontSize: '1rem', color: '#166534' }}>
+                  📏 Input Pengukuran — {selectedChild.name}
+                </h3>
                 <button onClick={() => setSelectedChild(null)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#666' }}>✕</button>
               </div>
-              <p style={{ margin: '0 0 12px', fontSize: '0.85rem', color: '#666' }}>{selectedChild.parent_name} · {selectedChild.address}</p>
+              <p style={{ margin: '0 0 12px', fontSize: '0.85rem', color: '#666' }}>
+                {selectedChild.parent_name} · {selectedChild.address}
+              </p>
               <form onSubmit={handleSubmitMeasurement}>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Berat (kg) *</label>
-                    <input className="form-input" type="number" step="0.1" min="0" required value={formData.weight_kg}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 500, marginBottom: 4 }}>Berat (kg) *</label>
+                    <input style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #E0E4E8', borderRadius: 8, fontSize: '0.9rem' }}
+                      type="number" step="0.1" min="0" required value={formData.weight_kg}
                       onChange={e => setFormData(f => ({ ...f, weight_kg: e.target.value }))} placeholder="0.0" />
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Tinggi (cm) *</label>
-                    <input className="form-input" type="number" step="0.1" min="0" required value={formData.height_cm}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 500, marginBottom: 4 }}>Tinggi (cm) *</label>
+                    <input style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #E0E4E8', borderRadius: 8, fontSize: '0.9rem' }}
+                      type="number" step="0.1" min="0" required value={formData.height_cm}
                       onChange={e => setFormData(f => ({ ...f, height_cm: e.target.value }))} placeholder="0.0" />
                   </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Catatan</label>
-                  <input className="form-input" value={formData.notes}
-                    onChange={e => setFormData(f => ({ ...f, notes: e.target.value }))} placeholder="Opsional" />
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 500, marginBottom: 4 }}>Catatan</label>
+                  <input style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #E0E4E8', borderRadius: 8, fontSize: '0.9rem' }}
+                    value={formData.notes} onChange={e => setFormData(f => ({ ...f, notes: e.target.value }))} placeholder="Opsional" />
                 </div>
                 {submitMsg && (
                   <div style={{ padding: '8px 12px', borderRadius: 6, marginBottom: 10, fontSize: '0.85rem',
@@ -195,33 +236,49 @@ export default function BidanDashboard({ user, onLogout, onBellClick }) {
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button type="submit" className="btn btn-primary btn-sm" disabled={submitting}>
+                  <button type="submit" disabled={submitting} style={{
+                    padding: '8px 18px', borderRadius: 8, border: 'none',
+                    background: '#1B5E20', color: 'white', fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer',
+                  }}>
                     {submitting ? 'Menyimpan...' : '💾 Simpan & Klasifikasi'}
                   </button>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSelectedChild(null)}>Batal</button>
+                  <button type="button" onClick={() => setSelectedChild(null)} style={{
+                    padding: '8px 18px', borderRadius: 8, border: '1.5px solid #E0E4E8',
+                    background: 'white', color: '#666', fontSize: '0.875rem', cursor: 'pointer',
+                  }}>Batal</button>
                 </div>
               </form>
             </div>
           )}
 
+          {/* Stats */}
+          <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+            <StatBox icon="👶" label="Total Anak" value={stats.total || 0} color="#1B5E20" />
+            <StatBox icon="✅" label="Normal" value={stats.green || 0} color="#2E7D32" />
+            <StatBox icon="🟡" label="Risiko" value={yellowCases.length} color="#F57C00" />
+            <StatBox icon="🔴" label="Rujuk" value={redCases.length} color="#C62828" />
+          </div>
+
           {/* Red cases */}
           {redCases.length > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              <div className="section-header">
-                <span className="section-title">🔴 Kasus Rujuk Segera ({redCases.length})</span>
-              </div>
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#2C3E50', marginBottom: 10 }}>🔴 Kasus Rujuk Segera ({redCases.length})</div>
               {redCases.map(c => (
-                <div key={c.id} className="card" style={{ marginBottom: 8, borderLeft: '4px solid #E74C3C', background: '#FEF2F2' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 600, marginBottom: 2 }}>{c.name}</div>
-                      <div style={{ fontSize: '0.8rem', color: '#666' }}>{c.parent_name} · {c.address}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#888', fontFamily: 'monospace' }}>NIK: {c.nik}</div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <RiskBadge status="red" />
-                      <button className="btn btn-primary btn-sm" onClick={() => setSelectedChild(c)}>📏 Ukur</button>
-                    </div>
+                <div key={c.id} style={{
+                  background: 'white', borderRadius: 12, padding: '14px 16px', marginBottom: 8,
+                  borderLeft: '4px solid #E74C3C', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 2 }}>{c.name}</div>
+                    <div style={{ fontSize: '0.8rem', color: '#666' }}>{c.parent_name} · {c.address}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <RiskBadge status="red" />
+                    <button onClick={() => setSelectedChild(c)} style={{
+                      padding: '6px 14px', borderRadius: 8, border: 'none',
+                      background: '#1B5E20', color: 'white', fontSize: '0.8rem', fontWeight: 500, cursor: 'pointer',
+                    }}>📏 Ukur</button>
                   </div>
                 </div>
               ))}
@@ -230,21 +287,24 @@ export default function BidanDashboard({ user, onLogout, onBellClick }) {
 
           {/* Yellow cases */}
           {yellowCases.length > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              <div className="section-header">
-                <span className="section-title">🟡 Kasus Kunjungan Rumah ({yellowCases.length})</span>
-              </div>
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#2C3E50', marginBottom: 10 }}>🟡 Kasus Kunjungan Rumah ({yellowCases.length})</div>
               {yellowCases.map(c => (
-                <div key={c.id} className="card" style={{ marginBottom: 8, borderLeft: '4px solid #F39C12', background: '#FEFCE8' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 600, marginBottom: 2 }}>{c.name}</div>
-                      <div style={{ fontSize: '0.8rem', color: '#666' }}>{c.parent_name} · {c.address}</div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <RiskBadge status="yellow" />
-                      <button className="btn btn-secondary btn-sm" onClick={() => setSelectedChild(c)}>📏 Ukur</button>
-                    </div>
+                <div key={c.id} style={{
+                  background: 'white', borderRadius: 12, padding: '14px 16px', marginBottom: 8,
+                  borderLeft: '4px solid #F39C12', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 2 }}>{c.name}</div>
+                    <div style={{ fontSize: '0.8rem', color: '#666' }}>{c.parent_name} · {c.address}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <RiskBadge status="yellow" />
+                    <button onClick={() => setSelectedChild(c)} style={{
+                      padding: '6px 14px', borderRadius: 8, border: '1.5px solid #E0E4E8',
+                      background: 'white', color: '#666', fontSize: '0.8rem', fontWeight: 500, cursor: 'pointer',
+                    }}>📏 Ukur</button>
                   </div>
                 </div>
               ))}
@@ -252,31 +312,41 @@ export default function BidanDashboard({ user, onLogout, onBellClick }) {
           )}
 
           {/* Child Table */}
-          <div className="section-header">
-            <span className="section-title">📋 Data Anak</span>
-            <div className="filter-bar">
-              <button className={`filter-chip ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>Semua</button>
-              <button className={`filter-chip ${filter === 'normal' ? 'active' : ''}`} onClick={() => setFilter('normal')}>Normal</button>
-              <button className={`filter-chip ${filter === 'risk' ? 'active' : ''}`} onClick={() => setFilter('risk')}>Berisiko</button>
+          <div style={{ background: 'white', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontWeight: 600, fontSize: '0.95rem', color: '#2C3E50' }}>📋 Data Anak</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[['all','Semua'],['normal','Normal'],['risk','Berisiko']].map(([val, lbl]) => (
+                  <button key={val} onClick={() => setFilter(val)} style={{
+                    padding: '5px 14px', borderRadius: 20, fontSize: '0.78rem', fontWeight: 500,
+                    border: '1.5px solid ' + (filter === val ? '#1B5E20' : '#E0E4E8'),
+                    background: filter === val ? '#1B5E20' : 'white',
+                    color: filter === val ? 'white' : '#7F8C8D', cursor: 'pointer',
+                  }}>{lbl}</button>
+                ))}
+              </div>
             </div>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: 48, color: '#999' }}>Memuat...</div>
+            ) : (
+              <ChildTable
+                children={filteredChildren}
+                onRowClick={c => setSelectedChild(c)}
+                onDelete={null}
+              />
+            )}
           </div>
-
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>Memuat...</div>
-          ) : (
-            <ChildTable
-              children={filteredChildren}
-              onRowClick={(child) => { setSelectedChild(child) }}
-              onDelete={null}
-            />
-          )}
         </div>
       </div>
 
       {/* FAB */}
-      <button className="fab" onClick={() => { setEditChild(null); setShowForm(true) }}>+</button>
+      <button onClick={() => { setEditChild(null); setShowForm(true) }} style={{
+        position: 'fixed', bottom: 28, right: 28, width: 54, height: 54,
+        borderRadius: '50%', background: '#1B5E20', color: 'white', fontSize: '1.5rem',
+        border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', cursor: 'pointer', zIndex: 50,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>+</button>
 
-      {/* Child Form Modal */}
       {showForm && (
         <ChildForm
           child={editChild}
@@ -294,15 +364,16 @@ export default function BidanDashboard({ user, onLogout, onBellClick }) {
         />
       )}
 
-      {/* Alert Panel */}
-      <AlertPanel
-        isOpen={panelOpen}
-        onClose={() => setPanelOpen(false)}
-        alerts={alerts}
-        stats={alertStats}
-        onRetry={handleRetry}
-        loading={alertLoading}
-      />
+      {panelOpen && (
+        <AlertPanel
+          isOpen={panelOpen}
+          onClose={() => setPanelOpen(false)}
+          alerts={alerts}
+          stats={alertStats}
+          onRetry={handleRetry}
+          loading={alertLoading}
+        />
+      )}
     </div>
   )
 }
