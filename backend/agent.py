@@ -11,7 +11,7 @@ import classifier as clf
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-CJSIoKjjsr-v0NlC7P3IhQ")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://ai.sumopod.com/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "glm-5")
+MODEL_NAME = os.getenv("MODEL_NAME", "mimo-v2-pro")
 
 AIDI_SYSTEM_PROMPT = """Anda adalah "Aidi", asisten kesehatan anak yang ramah dan hangat
 untuk Posyandu Patakbanteng, Desa Patakbanteng, Kecamatan Kejajar, Kabupaten Wonosobo,
