@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DIST = join(__dirname, 'dist')
-const BACKEND_URL = process.env.BACKEND_URL || 'https://spencer-aluminum-inbox-bachelor.trycloudflare.com'
+const BACKEND_URL = process.env.BACKEND_URL || 'https://min-acid-door-penny.trycloudflare.com'
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
