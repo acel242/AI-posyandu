@@ -42,7 +42,7 @@ export default function Login({ onLogin }) {
       <div className="login-card">
         <div className="login-logo">
           <div className="logo-icon">🏥</div>
-          <h1>Posyandu Connect</h1>
+          <h1>AI Posyandu</h1>
         </div>
 
         {error && <div className="login-error">{error}</div>}
