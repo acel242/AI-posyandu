@@ -150,7 +150,7 @@ async def echo_handler(update: Update, context: CallbackContext):
         resp = requests.post(
             f"{API_BASE}/api/agent/chat",
             json={"telegram_id": user_id, "message": user_text},
-            timeout=25,
+            timeout=60,
         )
         if resp.status_code == 200:
             data = resp.json()
