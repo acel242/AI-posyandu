@@ -1,17 +1,23 @@
 """
-Patyandu AI Agent — Aidi, single unified agent for warga/kader/bidan.
-GPT-5.1 via SumoPod with conversation memory and function-calling tools.
+Posyandu AI Agent — Aidi, single unified agent for warga/kader/bidan.
+Uses Deepseek for text + function calling, Groq as fallback.
 """
 
 import os
-import requests
 import json
+import logging
+import httpx
 import database as db
 import classifier as clf
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-CJSIoKjjsr-v0NlC7P3IhQ")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://ai.sumopod.com/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "glm-5")
+logger = logging.getLogger("posyandu.agent")
+
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro")
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 AIDI_SYSTEM_PROMPT = """Anda adalah "Aidi", asisten kesehatan anak yang ramah dan hangat
 untuk Posyandu Patakbanteng, Desa Patakbanteng, Kecamatan Kejajar, Kabupaten Wonosobo,
@@ -29,7 +35,7 @@ Kemampuan Anda (via tools):
 - list_schedules: Melihat jadwal yang ada
 - list_children: Melihat daftar anak terdaftar
 - get_child: Melihat detail satu anak
-- get_growth_chart: Generate growth chart PNG for Telegram display
+- get_growth_chart: Generate growth chart PNG untuk Telegram
 - classify_child: Klasifikasi status gizi BB/TB WHO
 - get_stats: Melihat statistik keseluruhan (total anak, risiko, dll)
 - list_posyandu: Melihat daftar Posyandu
@@ -37,22 +43,20 @@ Kemampuan Anda (via tools):
 
 Klasifikasi risiko WHO BB/TB (untuk referensi):
 - Normal (green): z-score >= -1 SD
-- Risiko (yellow): -3 SD <= z-score < -1 SD → kunjungan rumah 7 hari
+- Risiko (yellow): -3 SD <= z-score < -1 SD
 - Buruk (red): z-score < -3 SD → rujuk segera ke Puskesmas
 
 PENTING — Format Respons:
-- Jawab dengan teks biasa Indonesia yang natural, seperti mengobrol via WhatsApp
-- JANGAN pakai markdown formatting seperti ## heading, **bold**, ### subheading
-- Emoji boleh digunakan secukupnya untuk暄ans/prasaran
-- Gunakan bahasa Indonesia yang baku dan jelas
-- Jangan gunakan singkatan seperti 'n' untuk 'dan', 'de' untuk 'dengan', atau slang lainnya
-- Tulis lengkap dan rapi, gunakan titik dan koma dengan benar
-- Tulis seperti pesanchat biasa: paragraf, nomor sederhana seperti 1. 2. 3.
-- Panggil "Ibu" atau "Bapak" dengan hormat sesuai konteks
+- Jawab dengan teks biasa Bahasa Indonesia yang natural, seperti ngobrol via WhatsApp
+- JANGAN pakai markdown formatting (## **bold** dll)
+- Emoji boleh secukupnya
+- Gunakan bahasa Indonesia baku dan jelas
+- Tulis lengkap, pakai titik dan koma dengan benar
+- Panggil "Ibu" atau "Bapak" dengan hormat
 - Untuk kasus risiko tinggi, sarankan ke Puskesmas/bidan
 - Jika Anda menggunakan tool, tunggu hasilnya lalu berikan respons yang jelas
-- Tool adalah kekuatan Anda — gunakan dengan percaya diri untuk membantu
-- Untuk pendaftaran anak: ketika warga mengirim nama anak, tanggal lahir, nama orang tua, alamat, dan NIK, langsung gunakan tool register_child untuk menyimpan ke sistem. Jika gender (L/P) tidak disebutkan, gunakan default 'L' (laki-laki) dan tetap proses tanpa bertanya.
+- Untuk pendaftaran anak: ketika warga mengirim data anak, langsung gunakan tool register_child.
+  Jika gender (L/P) tidak disebutkan, gunakan default 'L' dan tetap proses.
 """
 
 
@@ -61,16 +65,16 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "create_schedule",
-            "description": "Membuat jadwal Posyandu atau reminder. Gunakan ini ketika pengguna ingin membuat jadwal kegiatan, Posyandu, atau mengingatkan warga.",
+            "description": "Membuat jadwal Posyandu atau reminder.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "title": {"type": "string", "description": "Judul jadwal, contoh: 'Posyandu Bulanan'"},
-                    "description": {"type": "string", "description": "Deskripsi kegiatan"},
-                    "scheduled_date": {"type": "string", "description": "Tanggal jadwal (format: YYYY-MM-DD)"},
-                    "scheduled_time": {"type": "string", "description": "Waktu jadwal (format: HH:MM)"},
-                    "target_role": {"type": "string", "enum": ["warga", "kader", "bidan", "semua"], "description": "Siapa yang dituju"},
-                    "reminder_days_before": {"type": "integer", "description": "Berapa hari sebelum untuk reminder"}
+                    "title": {"type": "string"},
+                    "description": {"type": "string"},
+                    "scheduled_date": {"type": "string", "description": "YYYY-MM-DD"},
+                    "scheduled_time": {"type": "string", "description": "HH:MM"},
+                    "target_role": {"type": "string", "enum": ["warga", "kader", "bidan", "semua"]},
+                    "reminder_days_before": {"type": "integer"}
                 },
                 "required": ["title", "scheduled_date", "scheduled_time"]
             }
@@ -100,11 +104,11 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_child",
-            "description": "Melihat detail satu anak berdasarkan NIK atau ID.",
+            "description": "Melihat detail satu anak berdasarkan NIK.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "nik": {"type": "string", "description": "NIK anak"}
+                    "nik": {"type": "string"}
                 }
             }
         }
@@ -113,11 +117,11 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_growth_chart",
-            "description": "Generate growth chart PNG for Telegram. Returns chart as base64 PNG.",
+            "description": "Generate growth chart PNG. Returns chart as base64.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "nik": {"type": "string", "description": "NIK of the child"},
+                    "nik": {"type": "string"},
                     "chart_type": {"type": "string", "enum": ["wfa", "hfa"], "default": "wfa"}
                 }
             }
@@ -127,14 +131,14 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "classify_child",
-            "description": "Klasifikasi status gizi BB/TB anak menggunakan WHO.",
+            "description": "Klasifikasi status gizi BB/TB menggunakan WHO.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "age_months": {"type": "integer", "description": "Umur anak dalam bulan"},
-                    "gender": {"type": "string", "enum": ["L", "P"], "description": "Jenis kelamin: L=laki, P=perempuan"},
-                    "weight_kg": {"type": "number", "description": "Berat anak dalam kg"},
-                    "height_cm": {"type": "number", "description": "Tinggi anak dalam cm"}
+                    "age_months": {"type": "integer"},
+                    "gender": {"type": "string", "enum": ["L", "P"]},
+                    "weight_kg": {"type": "number"},
+                    "height_cm": {"type": "number"}
                 },
                 "required": ["age_months", "gender", "weight_kg", "height_cm"]
             }
@@ -158,18 +162,18 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "register_child",
-            "description": "Mendaftarkan anak baru ke sistem Posyandu. Gunakan ketika warga mengirim data pendaftaran anak (nama, tanggal lahir, nama orang tua, alamat, NIK). Langsung panggil tool ini tanpa perlu bertanya lagi.",
+            "description": "Mendaftarkan anak baru. Panggil langsung tanpa bertanya lagi.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "nik": {"type": "string", "description": "NIK anak (16 digit). Opsional jika belum punya."},
-                    "name": {"type": "string", "description": "Nama lengkap anak"},
-                    "date_of_birth": {"type": "string", "description": "Tanggal lahir (format: YYYY-MM-DD)"},
-                    "gender": {"type": "string", "enum": ["L", "P"], "description": "Jenis kelamin: L=laki-laki, P=perempuan. Jika tidak tahu, isi 'L' sebagai default."},
-                    "parent_name": {"type": "string", "description": "Nama orang tua/wali"},
-                    "parent_phone": {"type": "string", "description": "Nomor telepon orang tua"},
-                    "address": {"type": "string", "description": "Alamat lengkap"},
-                    "rt_rw": {"type": "string", "description": "RT/RW (format: RT01/RW02)"}
+                    "nik": {"type": "string", "description": "16 digit, opsional"},
+                    "name": {"type": "string"},
+                    "date_of_birth": {"type": "string", "description": "YYYY-MM-DD"},
+                    "gender": {"type": "string", "enum": ["L", "P"], "description": "Default 'L' jika tidak tahu"},
+                    "parent_name": {"type": "string"},
+                    "parent_phone": {"type": "string"},
+                    "address": {"type": "string"},
+                    "rt_rw": {"type": "string"}
                 },
                 "required": ["name", "date_of_birth", "gender", "parent_name", "address"]
             }
@@ -179,51 +183,67 @@ TOOLS = [
 
 
 class AidiAgent:
-    def __init__(self, model: str = MODEL_NAME):
-        self.model = model
-        self.api_key = OPENAI_API_KEY
-        self.base_url = OPENAI_BASE_URL
-        # Reuse session for connection pooling — faster & less memory churn
-        self.session = requests.Session()
-        adapter = requests.adapters.HTTPAdapter(
-            pool_connections=10,
-            pool_maxsize=10,
-            max_retries=3
-        )
-        self.session.mount("https://", adapter)
+    def __init__(self):
+        self.deepseek_key = DEEPSEEK_API_KEY
+        self.deepseek_model = DEEPSEEK_MODEL
+        self.deepseek_url = DEEPSEEK_BASE_URL
+        self.groq_key = GROQ_API_KEY
+        self.groq_model = GROQ_MODEL
+        self.groq_url = GROQ_BASE_URL
 
-    # ── LLM with function calling ─────────────────────────────────────────
+    # ── LLM call with Deepseek primary + Groq fallback ──────────────
 
-    def _call_llm(self, messages: list, tools: list = None) -> dict:
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": self.model,
+    async def _call_llm(self, messages: list, tools: list = None) -> dict:
+        payload_base = {
             "messages": messages,
             "temperature": 0.7,
             "max_tokens": 512,
         }
         if tools:
-            payload["tools"] = tools
+            payload_base["tools"] = tools
+            payload_base["tool_choice"] = "auto"
 
+        # Try Deepseek first
         try:
-            resp = self.session.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=30,
-            )
-            if resp.status_code != 200:
-                return {"content": "Maaf, saya sedang tidak bisa menjawab. Coba lagi nanti."}
-            return resp.json()["choices"][0]["message"]
-        except requests.exceptions.Timeout:
-            return {"content": "Maaf, koneksi lambat. Coba lagi sesaat."}
-        except Exception:
-            return {"content": "Maaf, terjadi kesalahan teknis. Coba lagi nanti."}
+            payload = {"model": self.deepseek_model, **payload_base}
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(
+                    f"{self.deepseek_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.deepseek_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload
+                )
+                if resp.status_code == 200:
+                    return resp.json()["choices"][0]["message"]
+                logger.warning(f"Deepseek error {resp.status_code}: {resp.text[:200]}")
+        except Exception as e:
+            logger.warning(f"Deepseek call failed: {e}, trying Groq")
 
-    # ── Tool executors ────────────────────────────────────────────────────
+        # Fallback to Groq
+        if not self.groq_key:
+            return {"content": "Maaf, layanan AI sedang tidak tersedia. Coba lagi nanti."}
+        try:
+            payload = {"model": self.groq_model, **payload_base}
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(
+                    f"{self.groq_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.groq_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload
+                )
+                if resp.status_code == 200:
+                    return resp.json()["choices"][0]["message"]
+                logger.warning(f"Groq error {resp.status_code}: {resp.text[:200]}")
+        except Exception as e:
+            logger.warning(f"Groq fallback failed: {e}")
+
+        return {"content": "Maaf, layanan AI sedang tidak tersedia. Coba lagi nanti."}
+
+    # ── Tool executors ────────────────────────────────────────────────
 
     async def _exec_create_schedule(self, args: dict) -> str:
         try:
@@ -354,7 +374,6 @@ class AidiAgent:
     async def _exec_register_child(self, args: dict) -> str:
         try:
             import random
-            # Fill defaults for missing required fields
             args.setdefault('nik', f"TEMP{random.randint(10000000, 99999999)}")
             args.setdefault('parent_phone', '-')
             args.setdefault('rt_rw', '-')
@@ -384,10 +403,10 @@ class AidiAgent:
             return await fn(args)
         return f"Tool {name} tidak dikenal."
 
-    # ── Main process ─────────────────────────────────────────────────────────
+    # ── Main process ──────────────────────────────────────────────────
 
     async def process(self, text: str, telegram_id: str) -> str:
-        # Load conversation history
+        # Load conversation history (last 5 messages)
         try:
             history = await db.get_conversation_history(telegram_id, limit=5)
         except Exception:
@@ -403,12 +422,15 @@ class AidiAgent:
 
         # First LLM call with tools
         response = self._call_llm(msgs, tools=TOOLS)
+        if hasattr(response, '__await__'):
+            response = await response
 
         # Handle function call
         if "tool_calls" in response:
             tool_call = response["tool_calls"][0]
             fn_name = tool_call["function"]["name"]
-            fn_args_raw = tool_call["function"]["arguments"]; fn_args = json.loads(fn_args_raw) if isinstance(fn_args_raw, str) else (fn_args_raw or {})
+            fn_args_raw = tool_call["function"]["arguments"]
+            fn_args = json.loads(fn_args_raw) if isinstance(fn_args_raw, str) else (fn_args_raw or {})
 
             tool_result = await self._execute_tool(fn_name, fn_args)
 
@@ -420,9 +442,10 @@ class AidiAgent:
                 "content": tool_result
             })
             final = self._call_llm(msgs)
+            if hasattr(final, '__await__'):
+                final = await final
             final_content = final.get("content", tool_result)
 
-            # Save
             try:
                 await db.save_conversation(telegram_id, None, "user", text, final_content)
             except Exception:
@@ -431,12 +454,10 @@ class AidiAgent:
 
         # No tool call — direct response
         content = response.get("content", "Maaf, saya tidak bisa menjawab saat ini.")
-
         try:
             await db.save_conversation(telegram_id, None, "user", text, content)
         except Exception:
             pass
-
         return content
 
 

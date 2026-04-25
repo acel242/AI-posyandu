@@ -10,6 +10,14 @@ import scheduler as sc
 import chart_generator as cg
 import who_anthro as who
 import os
+from dotenv import load_dotenv
+
+# Load .env from project root or backend directory
+_env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+if os.path.exists(_env_file):
+    load_dotenv(_env_file)
+else:
+    load_dotenv()  # fallback to default
 
 
 @asynccontextmanager

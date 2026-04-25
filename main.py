@@ -2,4 +2,5 @@
 import uvicorn, os
 
 PORT = int(os.environ.get("PORT", 8000))
-uvicorn.run("server:app", host="0.0.0.0", port=PORT, reload=False)
+# Import from backend/server.py (canonical)
+uvicorn.run("backend.server:app", host="0.0.0.0", port=PORT, reload=False)
