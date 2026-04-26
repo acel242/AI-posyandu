@@ -12,6 +12,15 @@ import classifier as clf
 
 logger = logging.getLogger("posyandu.agent")
 
+# RAG: Semantic search for lessons (lazy — module loaded, embeddings built on first use)
+SEMANTIC_SEARCH_AVAILABLE = False
+try:
+    import embeddings as emb  # noqa: F401
+    SEMANTIC_SEARCH_AVAILABLE = True
+    logger.info("Semantic search (embeddings) module loaded — will build vectors on first use")
+except Exception as e:
+    logger.warning(f"Embeddings module unavailable: {e}")
+
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -40,6 +49,7 @@ Kemampuan Anda (via tools):
 - get_stats: Melihat statistik keseluruhan (total anak, risiko, dll)
 - list_posyandu: Melihat daftar Posyandu
 - register_child: Mendaftarkan anak baru ke sistem
+- search_lessons: Mencari lesson/pengetahuan yang pernah dipelajari berdasarkan query. Gunakan tool ini untuk menemukan solusi dari masalah yang mirip pernah terjadi sebelumnya.
 
 Klasifikasi risiko WHO BB/TB (untuk referensi):
 - Normal (green): z-score >= -1 SD
@@ -179,6 +189,21 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_lessons",
+            "description": "Mencari lesson/pengetahuan yang pernah dipelajari berdasarkan query semantic. Gunakan untuk menemukan solusi dari masalah serupa yang pernah terjadi. Mengembalikan hasil dengan skor kemiripan.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Pertanyaan atau topik yang ingin dicari, dalam Bahasa Indonesia."},
+                    "top_k": {"type": "integer", "description": "Jumlah hasil yang ingin ditampilkan", "default": 5}
+                },
+                "required": ["query"]
+            }
+        }
+    },
 ]
 
 
@@ -268,25 +293,43 @@ class AidiAgent:
         except Exception as e:
             return f"Gagal mengambil jadwal: {e}"
 
-    async def _exec_list_children(self, _) -> str:
+    async def _exec_list_children(self, args: dict) -> str:
+        """List children belonging to the current telegram user only."""
         try:
+            telegram_id = args.get('_telegram_id')
             rows = await db.get_all_children()
+            
+            # Filter to only show children registered by this user
+            if telegram_id:
+                rows = [r for r in rows if r.get('parent_telegram_id') == telegram_id or r.get('created_by_telegram_id') == telegram_id]
+            
             if not rows:
-                return "Belum ada anak terdaftar."
-            lines = [f"Daftar Anak Terdaftar ({len(rows)}):"]
+                return "Belum ada anak yang terdaftar pada akun Anda. Silakan /daftar untuk mendaftarkan anak."
+            
+            lines = [f"Daftar Anak Anda ({len(rows)}):"]
             for r in rows:
-                lines.append(f"• {r['name']} ({r['gender']}) — {r['address']} [{r['risk_status']}]")
+                status = r.get('risk_status', 'unmeasured')
+                status_emoji = {'green': '🟢', 'yellow': '🟡', 'red': '🔴', 'unmeasured': '⚪'}.get(status, '⚪')
+                lines.append(f"• {r['name']} ({r.get('gender','?')}) — Status: {status_emoji} {status.title()}")
+            lines.append("\nKirim NIK anak untuk lihat detail lengkap.")
             return "\n".join(lines)
         except Exception as e:
             return f"Gagal mengambil data anak: {e}"
 
     async def _exec_get_growth_chart(self, args: dict) -> str:
+        """Generate growth chart — auth check: only own child's data."""
         try:
             nik = args.get("nik")
+            telegram_id = args.get('_telegram_id')
             chart_type = args.get("chart_type", "wfa")
             child = await db.get_child_by_nik(nik) if nik else None
             if not child:
                 return f"Tidak ditemukan anak dengan NIK {nik}."
+            
+            # Auth check
+            if telegram_id and child.get('parent_telegram_id') != telegram_id and child.get('created_by_telegram_id') != telegram_id:
+                return "⚠️ Anda tidak memiliki akses ke data anak ini."
+            
             meas = await db.get_child_measurements(child["id"])
             if not meas:
                 return f"Belum ada data pengukuran untuk {child['name']}."
@@ -302,22 +345,27 @@ class AidiAgent:
             return f"Gagal membuat growth chart: {e}"
 
     async def _exec_get_child(self, args: dict) -> str:
+        """Get child detail — only if belongs to requesting user."""
         try:
             nik = args.get("nik")
+            telegram_id = args.get('_telegram_id')
             child = await db.get_child_by_nik(nik) if nik else None
             if not child:
                 return f"Tidak ditemukan anak dengan NIK {nik}."
+            
+            # Auth check: only allow access if user owns this child
+            if telegram_id and child.get('parent_telegram_id') != telegram_id and child.get('created_by_telegram_id') != telegram_id:
+                return "⚠️ Anda tidak memiliki akses ke data anak ini."
+            
             records = await db.get_health_records(child["id"])
             lines = [
-                f"Nama: {child['name']}",
+                f"👶 *{child['name']}*",
                 f"NIK: {child['nik']} | {child['gender']} | {child['date_of_birth']}",
-                f"Orang Tua: {child['parent_name']} | Telp: {child['parent_phone']}",
-                f"Alamat: {child['address']}",
-                f"Status Gizi: {child['risk_status']}",
+                f"Status Gizi: {child['risk_status'].upper()}",
                 f"Riwayat Pengukuran: {len(records)}x",
             ]
             for rec in records[-3:]:
-                lines.append(f"  - {rec['date']}: BB={rec['weight_kg']}kg, TB={rec['height_cm']}cm → {rec['bb_tb_status']}")
+                lines.append(f"  📅 {rec['date']}: BB={rec['weight_kg']}kg, TB={rec['height_cm']}cm → {rec['bb_tb_status']}")
             return "\n".join(lines)
         except Exception as e:
             return f"Gagal mengambil data anak: {e}"
@@ -386,6 +434,37 @@ class AidiAgent:
         except Exception as e:
             return f"Gagal mendaftarkan anak: {e}"
 
+    async def _exec_search_lessons(self, args: dict) -> str:
+        """Semantic search over learned lessons using TF-IDF cosine similarity."""
+        try:
+            if not SEMANTIC_SEARCH_AVAILABLE:
+                return ("Fitur pencarian lesson tidak tersedia. "
+                        "Silakan coba lagi nanti.")
+            query = args.get("query", "")
+            top_k = args.get("top_k", 5)
+            if not query.strip():
+                return "Query kosong. Beri kata kunci pencarian."
+
+            results = await emb.semantic_search_lessons(query, top_k=top_k, min_score=0.05)
+            if not results:
+                return ("Belum ada lesson yang cocok dengan query tersebut. "
+                        "Masalah ini mungkin case baru — coba tangani langsung dan "
+                        "jika berhasil, simpan sebagai lesson.")
+            lines = [f"Hasil pencarian lesson (top {len(results)}):"]
+            for r in results:
+                score = r.get("semantic_score", 0)
+                etype = r.get("error_type", "-")
+                lesson = r.get("lesson_text", "-")[:200]
+                action = r.get("action", "")
+                lines.append(f"\n• [{etype}] skor:{score:.3f}")
+                lines.append(f"  Lesson: {lesson}")
+                if action:
+                    lines.append(f"  Action: {action[:100]}")
+            return "\n".join(lines)
+        except Exception as e:
+            logger.warning(f"search_lessons error: {e}")
+            return f"Gagal mencari lesson: {e}"
+
     async def _execute_tool(self, name: str, args: dict) -> str:
         executors = {
             "create_schedule": self._exec_create_schedule,
@@ -397,6 +476,7 @@ class AidiAgent:
             "get_stats": self._exec_get_stats,
             "list_posyandu": self._exec_list_posyandu,
             "register_child": self._exec_register_child,
+            "search_lessons": self._exec_search_lessons,
         }
         fn = executors.get(name)
         if fn:
@@ -406,6 +486,16 @@ class AidiAgent:
     # ── Main process ──────────────────────────────────────────────────
 
     async def process(self, text: str, telegram_id: str) -> str:
+        # Lazy-init lesson embeddings on first message (RAG semantic search)
+        if SEMANTIC_SEARCH_AVAILABLE:
+            try:
+                provider = emb.get_tfidf_provider()
+                if not provider.built:
+                    await emb.build_lesson_embeddings()
+                    logger.info("Lesson embeddings built at first use")
+            except Exception as e:
+                logger.warning(f"Could not build lesson embeddings: {e}")
+
         # Load conversation history (last 5 messages)
         try:
             history = await db.get_conversation_history(telegram_id, limit=5)
@@ -432,6 +522,7 @@ class AidiAgent:
             fn_args_raw = tool_call["function"]["arguments"]
             fn_args = json.loads(fn_args_raw) if isinstance(fn_args_raw, str) else (fn_args_raw or {})
 
+            fn_args['_telegram_id'] = telegram_id  # Inject for auth filtering
             tool_result = await self._execute_tool(fn_name, fn_args)
 
             # Feed result back to LLM for final response

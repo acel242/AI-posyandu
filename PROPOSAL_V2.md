@@ -1,32 +1,113 @@
-# PROPOSAL PENGEMBANGAN SISTEM
-# AI-Posyandu v2.0 — Platform AI Agent untuk Pencegahan Stunting dan Aktivasi Posyandu
+# FORMAT PROPOSAL PROGRAM BCA
 
 ---
 
-## 1. LATAR BELAKANG
+# COVER
+
+## AI-POSYANDU v2.0
+### Platform AI Agent untuk Pencegahan Stunting dan Aktivasi Posyandu
+
+**Program:** Gerakan Berbakti untuk Indonesia Lebih Sehat  
+**Lokasi:** Desa Patakbanteng, Wonosobo, Jawa Tengah  
+**Tanggal:** April 2026  
+**Versi:** 2.0  
+
+---
+
+# HALAMAN IDENTITAS
+
+| Field | Detail |
+|-------|--------|
+| **Nama Program** | AI-Posyandu Wonosobo v2.0 |
+| **Jenis Program** | Teknologi AI untuk Kesehatan Masyarakat |
+| **Lokasi Implementasi** | Desa Patakbanteng, Kecamatan Kejajar, Kabupaten Wonosobo, Jawa Tengah |
+| **Durasi Program** | 6 Bulan (Pilot) |
+| **Penanggung Jawab** | Tim Pengembangan AI-Posyandu |
+| **Kontak** | - |
+| **Target Beneficiaries** | 50+ balita dan keluarga di Patakbanteng |
+| **Anggaran** | Rp 5.500.000 (Total) |
+
+---
+
+# RINGKASAN
 
 AI-Posyandu adalah platform berbasis AI Agent yang dirancang untuk membantu pencegahan stunting dan aktivasi Posyandu di Desa Patakbanteng, Wonosobo, Jawa Tengah. Sistem ini terdiri dari Telegram Bot untuk interaksi warga, dashboard web untuk Kader/Bidan, dan AI reasoning untuk klasifikasi status gizi balita berdasarkan standar WHO.
 
-**Kondisi Saat Ini (v1.0):**
-- Telegram Bot sudah aktif untuk registrasi warga dan chat AI
-- Dashboard React untuk Kader, Bidan, dan Kepala Desa
-- AI BB/TB classifier berdasarkan standar WHO (Z-score)
-- Database SQLite menyimpan data anak dan rekam medis
-- Backend Flask dengan REST API
-- Auto-notification dan reminder via Telegram
-
-**Permasalahan yang Dihadapi:**
+**Permasalahan Utama:**
 - AI chat masih berbasis keyword matching (LIKE query), bukan semantic search
 - Tidak ada sistem RAG (Retrieval Augmented Generation) untuk jawaban berbasis data
 - Dashboard belum memiliki visualisasi tren stunting per wilayah
-- belum ada sistem alert otomatis untuk balita dengan Z-score berisiko
-- belum ada integrasi dengan sistem Puskesmas/Faskes lain
+- Belum ada sistem alert otomatis untuk balita dengan Z-score berisiko
+- Belum ada integrasi dengan sistem Puskesmas/Faskes lain
+
+**Solusi yang Ditawarkan:**
+1. Semantic Search dengan Embeddings — upgrade dari keyword ke semantic search
+2. RAG Pipeline — AI chat mengambil konteks dari database
+3. Auto-Alert System — notifikasi otomatis untuk balita berisiko
+4. Dashboard Tren Stunting — visualisasi Z-score distribution
+
+**Angka Kunci:**
+- Total Balita Terdaftar: 50+ (pilot Patakbanteng)
+- Estimasi Biaya Bulanan: Rp 250.000 - 650.000
+- Target Penurunan Stunting: > 10% per tahun
 
 ---
 
-## 2. CAPAIAN SAAT INI (v1.5)
+# BAB I ANALISIS MASALAH
 
-### Sistem yang Sudah Berjalan
+## 1.1 Latar Belakang Stunting di Indonesia
+
+Stunting adalah kondisi gagal tumbuh pada balita akibat kekurangan gizi kronis. Prevalensi stunting di Indonesia masih tinggi:
+
+| Wilayah | Prevalensi Stunting |
+|--------|-------------------|
+| Nasional | 21,6% (SSGI 2023) |
+| Jawa Tengah | 20,3% |
+| Wonosobo | ~25% (di atas rata-rata nasional) |
+
+## 1.2 Permasalahan di Desa Patakbanteng
+
+**Kondisi Geografis:**
+- Desa di ketinggian (~900m dpl), akses ke Puskesmas jauh
+- Banyak dusun terpencil dengan internet terbatas
+
+**Kondisi SDM:**
+- Kader umumnya ibu-ibu rumah tangga, keterbatasan teknologi
+- Bidan hanya 1 untuk beberapa desa
+
+**Kondisi Data:**
+- Pencatatan masih manual di buku KIA
+- Data tidak terstandarisasi antar Posyandu
+- Tidak ada sistem alert untuk balita berisiko
+
+## 1.3 Analisis Permasalahan per Stakeholder
+
+### Dari Sisi Warga
+
+| Permasalahan | Contoh | Frekuensi |
+|-------------|--------|-----------|
+| Tidak tahu jadwal Posyandu | Perlu tanya kader setiap bulan | Tinggi |
+| Tidak tahu status gizi anak | Tidak ada cara track mandiri | Tinggi |
+| Bingung tanya soal nutrisi | Tidak ada yang bisa ditanya kapan saja | Sedang |
+| Tidak ada reminder | Lupa jadwal penimbangan | Tinggi |
+
+### Dari Sisi Kader
+
+| Permasalahan | Contoh | Frekuensi |
+|-------------|--------|-----------|
+| Buku KIA penuh | Catat manual, susah cari data lama | Tinggi |
+| Tidak ada alarm untuk anak berisiko | Harus ingat sendiri mana anak bermasalah | Tinggi |
+| Workload tinggi | 1 kader handle 30-50 balita | Tinggi |
+
+### Dari Sisi Bidan
+
+| Permasalahan | Contoh | Frekuensi |
+|-------------|--------|-----------|
+| Data dari berbagai Posyandu tidak unify | Harus kumpulkan dari banyak buku | Tinggi |
+| Tidak ada sistem alert | Tidak tahu balita baru masuk zona merah | Tinggi |
+| Laporan bulanan manual | Hitung manual, prone error | Tinggi |
+
+## 1.4 Capaian Sistem Saat Ini (v1.5)
 
 | Komponen | Status | Keterangan |
 |----------|--------|------------|
@@ -38,7 +119,45 @@ AI-Posyandu adalah platform berbasis AI Agent yang dirancang untuk membantu penc
 | Auto-notification | ✅ Aktif | Reminder jadwal imunisasi via bot |
 | Database | ✅ Aktif | SQLite, 100KB+ data anak |
 
-### Teknologi yang Digunakan
+---
+
+# BAB II METODE PELAKSANAAN
+
+## 2.1 Metode Pengumpulan Data
+
+### Data Primer
+- **Registrasi Warga:** Via Telegram Bot dengan validasi Kader
+- **Pengukuran Anthropometri:** Input manual oleh Kader via dashboard
+- **Chat Interaction:** Data percakapan AI untuk improvement
+
+### Data Sekunder
+- **Buku KIA** — Data historis balita dari catatan manual
+- **Standar WHO** — Tabel Z-score untuk klasifikasi
+- **PMBA (Pedoman Makan Bayi dan Balita)** — Kemenkes RI
+
+## 2.2 Metode Analisis
+
+### AI Z-Score Classification
+Menggunakan standar WHO Z-score:
+- 🟢 Normal: ≥ -1 SD
+- 🟡 Risiko: -3 SD ≤ Z < -1 SD
+- 🔴 Berat: < -3 SD
+
+### Semantic Search
+Upgrade dari keyword LIKE query ke TF-IDF/semantic embeddings untuk pencarian yang lebih akurat.
+
+## 2.3 Timeline Implementasi
+
+| Bulan | Aktivitas |
+|-------|-----------|
+| Bulan 1 | Semantic search + RAG implementation + Knowledge base setup |
+| Bulan 2 | Auto-alert system + Dashboard tren stunting |
+| Bulan 3 | Monitoring kinerja Kader + Integrasi Puskesmas |
+| Bulan 4 | Mobile app (React Native) + Multi-desa scaling |
+| Bulan 5 | Laporan otomatis + Optimasi + User testing |
+| Bulan 6 | Pilot evaluation + documentation + handover |
+
+## 2.4 Teknologi yang Digunakan
 
 | Layer | Teknologi |
 |-------|-----------|
@@ -52,72 +171,36 @@ AI-Posyandu adalah platform berbasis AI Agent yang dirancang untuk membantu penc
 
 ---
 
-## 3. RENCANA PENGEMBANGAN (v2.0)
+# BAB III PROGRAM KERJA & RENCANA ANGGARAN
+
+## 3.1 Rencana Pengembangan (v2.0)
 
 ### Fase 1 — AI & RAG Upgrade (2-3 minggu)
 
-**3.1 Semantic Search dengan Embeddings**
-- Upgrade dari keyword LIKE → semantic search menggunakan embeddings
-- Deepseek embedding model (text-embedding-3-small atau model yang tersedia)
-- Query: "anak dengan berat badan kurang" → tetap temukan "balita underweight" dsb
-
-**3.2 RAG (Retrieval Augmented Generation)**
-- AI chat mengambil konteks dari database sebelum menjawab
-- Contoh: tanya "berapa anak Z-score merah?" → AI jawab berdasarkan data aktual
-- Tidak lagi answer dari training data saja
-
-**3.3 Knowledge Base Terstruktur**
-- Dokumen: panduan PMBA (Pedoman Makan Bayi dan Balita), standar WHO, kebijakan stunting lokal
-- Di-load ke vector store untuk retrieval
-- AI bisa jawab pertanyaan spesifik tentang stunting prevention
-
----
+| Aktivitas | Deskripsi |
+|-----------|-----------|
+| Semantic Search | Upgrade dari keyword LIKE → semantic search menggunakan embeddings |
+| RAG Pipeline | AI chat mengambil konteks dari database sebelum menjawab |
+| Knowledge Base | Dokumen PMBA, standar WHO, kebijakan stunting lokal |
 
 ### Fase 2 — Alert & Monitoring (2-3 minggu)
 
-**3.4 Auto-Alert untuk Z-Score Berisiko**
-- Sistem auto-detect balita dengan Z-score kuning/merah
-- Notifikasi otomatis ke Kader dan Bidan via Telegram
-- Alert level: 🟡 Risiko (home visit 7 hari) / 🔴 Berat (rujuk ke Puskesmas segera)
-
-**3.5 Dashboard Tren Stunting**
-- Visualisasi Z-score distribution per bulan
-- Heatmap wilayah: mana dusun/RT yang paling banyak balita berisiko
-- Perbandingan year-over-year progress
-
-**3.6 Monitoring Kinerja Kader**
-- Track: berapa banyak balita tiap Kader, compliance rate imunisasi
-- Reminder otomatis jika ada balita belum ditimbang >1 bulan
-- Leaderboard kebahagiaan (nutrition success rate)
-
----
+| Aktivitas | Deskripsi |
+|-----------|-----------|
+| Auto-Alert Z-Score | Sistem auto-detect balita dengan Z-score kuning/merah |
+| Dashboard Tren Stunting | Visualisasi Z-score distribution per bulan |
+| Monitoring Kinerja Kader | Track: berapa banyak balita tiap Kader, compliance rate imunisasi |
 
 ### Fase 3 — Integrasi & Skalabilitas (3-4 minggu)
 
-**3.7 Integrasi Puskesmas/Faskes**
-- API untuk bidirectional data exchange dengan Puskesmas
-- Rujukan otomatis: balita Z-score < -3 SD → kirim notifikasi ke Puskesmas
-- Data imunisasi dari Faskes masuk ke sistem Posyandu
+| Aktivitas | Deskripsi |
+|-----------|-----------|
+| Integrasi Puskesmas/Faskes | API untuk bidirectional data exchange |
+| Mobile App | React Native untuk Kader lapangan |
+| Multi-Desa Scaling | Sistem support multiple villages |
+| Laporan Otomatis | Generate laporan bulanan untuk Dinas Kesehatan |
 
-**3.8 Mobile App (React Native)**
-- Aplikasi mobile untuk Kader下地
-- Input data anthropometri langsung dari lapangan
-- Camera capture untuk dokumentasi
-- Offline-first dengan sync saat ada koneksi
-
-**3.9 Multi-Desa Scaling**
-- Sistem support multiple villages dengan satu dashboard
-- Kepala Desa能看到各县的数据
-- District-level aggregation untuk camat
-
-**3.10 Laporan Otomatis ke Dinas Kesehatan**
-- Generate laporan bulanan: jumlah balita, Z-score distribution, progress
-- Export ke format yang dibutuhkan Dinas (CSV, Excel, PDF)
-- Auto-submit via email atau API
-
----
-
-## 4. ESTIMASI BIAYA OPERASI
+## 3.2 Estimasi Biaya Operasional
 
 | Komponen | Biaya/Bulan | Keterangan |
 |----------|-------------|------------|
@@ -129,24 +212,37 @@ AI-Posyandu adalah platform berbasis AI Agent yang dirancang untuk membantu penc
 | SSL Certificate | GRATIS | Let's Encrypt |
 | **Total** | **~Rp 250.000 - 650.000/bulan** | |
 
----
+## 3.3 Estimasi Biaya Pengembangan
 
-## 5. TIM PENGEMBANG
-
-| Peran | Tugas |
-|-------|-------|
-| Project Manager | Koordinasi dengan Dinas Kesehatan, monitoring |
-| Backend Developer | Flask API, database, RAG implementation |
-| Frontend Developer | React dashboard, mobile app |
-| AI/ML Engineer | Embeddings, RAG pipeline, alert system |
-| UI/UX Designer | Wireframe, mockup, user flow |
-| System Admin | Server, deployment, monitoring |
-
-**Estimasi tim minimal**: 2-3 orang (1 fullstack + 1 AI engineer + 1 designer)
+| Fase | Durasi | Biaya |
+|------|--------|-------|
+| Fase 1 (AI & RAG) | 2-3 minggu | Rp 1.500.000 |
+| Fase 2 (Alert) | 2-3 minggu | Rp 1.500.000 |
+| Fase 3 (Integrasi) | 3-4 minggu | Rp 2.500.000 |
+| **Total** | **3-4 bulan** | **Rp 5.500.000** |
 
 ---
 
-## 6. METRIX KEBERHASILAN
+# BAB IV KEBERLANJUTAN
+
+## 4.1 Rencana Handover
+
+Setelah masa pilot berakhir:
+1. **Transfer Knowledge** — Training intensif untuk tim teknis lokal
+2. **Dokumentasi** — Dokumentasi lengkap sistem dalam bahasa Indonesia
+3. **Source Code** — Commit ke repository dengan license yang sesuai
+4. **Operasi** — Tim IT Dinas Kesehatan übernimmt operasional
+
+## 4.2 Rencana Monitoring
+
+| Aktivitas | Frekuensi | Penanggung Jawab |
+|-----------|-----------|------------------|
+| Review data Z-score | Bulanan | Bidan Desa |
+| Evaluasi sistem | 3-bulanan | Dinas Kesehatan |
+| Audit keamanan | 6-bulanan | Tim IT |
+| Backup database | Harian | System Admin |
+
+## 4.3 Metrix Keberhasilan
 
 | Metric | Target | Cara Ukur |
 |--------|--------|-----------|
@@ -158,173 +254,18 @@ AI-Posyandu adalah platform berbasis AI Agent yang dirancang untuk membantu penc
 | System uptime | > 99% | Monitoring |
 | Cost per child tracked | < Rp 5.000/bulan | Total ops cost / anak |
 
----
+## 4.4 Rencana Keberlanjutan Finansial
 
-## 7. DOKUMENTASI TEKNIS
-
-### Arsitektur Sistem v2.0
-
-```
-                        ┌──────────────────┐
-                        │      Warga       │
-                        │   (Telegram +    │
-                        │    Mobile App)    │
-                        └────────┬─────────┘
-                                 │ message / http
-           ┌─────────────────────┼─────────────────────┐
-           ▼                     ▼                     ▼
-  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-  │  Telegram Bot     │  │   Flask API      │  │  React Frontend   │
-  │  (Python/pytele)  │  │   (port 5001)  │  │  (port 5002)    │
-  └────────┬─────────┘  └────────┬─────────┘  └──────────────────┘
-           │                      │
-           │ write/read           │ read/write
-           ▼                      ▼
-  ┌──────────────────────────────────────────────┐
-  │              SQLite Database                    │
-  │           (posyandu.db)                       │
-  └──────────────────────────────────────────────┘
-           │
-           ├──────────────┐
-           ▼              ▼
-  ┌──────────────────┐  ┌──────────────────┐
-  │  Deepseek API     │  │  WHO Z-Score     │
-  │  (chat + embed)  │  │  Calculator      │
-  └──────────────────┘  └──────────────────┘
-           │
-           ▼
-  ┌──────────────────┐
-  │  Vector Store     │
-  │  (knowledge base) │
-  └──────────────────┘
-```
-
-### AI-Posyandu Agent Personality
-
-```
-Nama: Nutri (AI Assistant)
-Penampilan: Selalu hangat dan menyemangati, menggunakan emoji untuk data kesehatan anak
-Sifat: Berbasis data, akurat, dengan sentuhan empathy Indonesia
-
-Contoh respons:
-"Bu, dari data kami, Adi (3 tahun) saat ini ada di Z-score -2.1 SD. 
-Artinya perlu perhatian lebih ya. Saran kami: 
-1) Kunjugi Posyandu minggu depan untuk pengukuran ulang 
-2) Konsultasi ke Bidan untuk panduan makan siang
-3) Makan makanan tinggi protein: telur, ikan, tempe 💪"
-
-"Bu, bagus banget pertanyaan ibu! Untuk anak 6-12 bulan, 
-WHO merekomendasikan: ASI eksklusif 6 bulan, 
-lalu MPASI dimulai bertahap mulai 6 bulan. 
-Kalau di daerah sini, kami sarankan: bubur hati ayam + puree buah 🥕"
-```
-
-### Database Schema
-
-```sql
-CREATE TABLE children (
-    id INTEGER PRIMARY KEY,
-    nama TEXT NOT NULL,
-    tanggal_lahir TEXT,
-    jenis_kelamin TEXT,
-    nama_ortu TEXT,
-    no_hp_ortu TEXT,
-    alamat TEXT,
-    dusun TEXT,
-    rt TEXT,
-    rw TEXT,
-    berat_lahir REAL,
-    panjang_lahir REAL,
-    created_at TEXT,
-    updated_at TEXT
-);
-
-CREATE TABLE health_records (
-    id INTEGER PRIMARY KEY,
-    child_id INTEGER,
-    tanggal TEXT,
-    berat REAL,
-    panjang REAL,
-    lingkar_kepala REAL,
-    z_score_bb_u REAL,
-    z_score_pb_u REAL,
-    z_score_bb_pb REAL,
-    status_gizi TEXT,      -- Normal / Risiko / Berat
-    catatan TEXT,
-    created_at TEXT,
-    FOREIGN KEY (child_id) REFERENCES children(id)
-);
-
-CREATE TABLE posyandu_schedules (
-    id INTEGER PRIMARY KEY,
-    tanggal TEXT,
-    lokasi TEXT,
-    dusun TEXT,
-    jenis TEXT,            -- Umum / Bayi / Balita
-    created_at TEXT
-);
-
-CREATE TABLE notifications (
-    id INTEGER PRIMARY KEY,
-    child_id INTEGER,
-    notification_type TEXT,  -- reminder / alert / reminder_imunisasi
-    message TEXT,
-    sent_at TEXT,
-    read_at TEXT,
-    FOREIGN KEY (child_id) REFERENCES children(id)
-);
-```
-
-### API Endpoints
-
-| Method | Endpoint | Fungsi |
-|--------|----------|--------|
-| GET | /api/health | Health check |
-| GET | /api/stats | Dashboard statistics |
-| GET | /api/children | List all children |
-| GET | /api/children/:id | Child detail + health records |
-| POST | /api/children | Register new child |
-| GET | /api/children/:id/health-records | Get health history |
-| POST | /api/children/:id/health-record | Add health record + auto-classify Z-score |
-| PATCH | /api/children/:id/health-record/:record_id | Update health record |
-| POST | /api/agent/chat | AI Agent chat with RAG |
-| GET | /api/agent/classify | Standalone Z-score classification |
-| GET | /api/alerts | Get all active alerts (yellow/red Z-score) |
-| GET | /api/alerts/child/:id | Get alerts for specific child |
-| POST | /api/notifications/send | Send notification |
-| GET | /api/posyandu/schedules | Get upcoming Posyandu schedules |
-| GET | /api/posyandu/trends | Get Z-score trends over time |
+| Sumber Dana | Potensi |
+|-------------|---------|
+| Dinas Kesehatan Kabupaten | Budget kesehatan daerah |
+| APBDes | Dana desa untuk Posyandu digital |
+| CSR Perusahaan | Partnership dengan BCA/korporasi |
+| Grants Nasional | Kemenkes, Bappenas innovation grants |
 
 ---
 
-## 8. JADWAL KERJA
-
-| Bulan | Aktivitas |
-|-------|-----------|
-| Bulan 1 | Semantic search + RAG implementation + Knowledge base setup |
-| Bulan 2 | Auto-alert system + Dashboard tren stunting |
-| Bulan 3 | Monitoring kinerja Kader + Integrasi Puskesmas |
-| Bulan 4 | Mobile app (React Native) + Multi-desa scaling |
-| Bulan 5 | Laporan otomatis + Optimasi + User testing |
-| Bulan 6 | Pilot evaluation + documentation + handover |
-
----
-
-## 9. RISIKO DAN MITIGASI
-
-| Risiko | Probabilitas | Mitigasi |
-|--------|-------------|----------|
-| AI hallucinate info kesehatan | Medium | RAG with verified WHO sources + disclaimer |
-| Data warga tidak akurat | Medium | Cross-check dengan Bidan secara berkala |
-| Kader tidak bisa pakai teknologi | Medium | Training + UI sederhana + offline-first |
-| Internet di desa tidak stabil | High | Mobile app offline-first + sync when online |
-| Privacy data kesehatan | High | Anonymize for reporting + consent from ortu |
-| AI misclassify Z-score | Low | Double-check dengan rule-based WHO calculator |
-| Server downtime | Low | Cloudflare Tunnel + auto-restart + monitoring |
-
----
-
-## 10. KESIMPULAN
+# BAB V PENUTUP
 
 AI-Posyandu v1.5 sudah memiliki fondasi yang solid dengan chatbot Telegram, dashboard untuk berbagai level users, dan AI classifier untuk Z-score. Pengembangan ke v2.0 fokus pada:
 
@@ -335,30 +276,43 @@ AI-Posyandu v1.5 sudah memiliki fondasi yang solid dengan chatbot Telegram, dash
 
 Dengan estimasi biaya Rp 250.000-650.000/bulan, sistem ini sangat feasible untuk Desa Patakbanteng dan bisa di-scale ke desa lain di Wonosobo.
 
-**Langkah selanjutnya**: Persetujuan dari Dinas Kesehatan Kabupaten Wonosobo untuk pilot project 3 bulan, kemudian evaluasi dan pengembangan Fase 2.
+**Langkah selanjutnya:** Persetujuan dari Dinas Kesehatan Kabupaten Wonosobo untuk pilot project 3 bulan, kemudian evaluasi dan pengembangan Fase 2.
 
 ---
 
-## 11. LAMPIRAN
+# LAMPIRAN
 
-### A. Link Sistem Berjalan
+## A. Link Sistem Berjalan
 - Backend API: http://localhost:5001
 - Dashboard: (Vercel deployment atau localhost:5173)
 
-### B. Referensi
+## B. Referensi
 - WHO Child Growth Standards: https://www.who.int/tools/child-growth-standards
 - Deepseek API: https://platform.deepseek.com
 - Groq API: https://console.groq.com
 - React: https://react.dev
 
-### C. Contoh Knowledge Base untuk RAG
+## C. Contoh Knowledge Base untuk RAG
 1. **PMBA (Pedoman Makan Bayi dan Balita)** — Kemenkes RI
 2. **Standar WHO Z-Score** — tabel reference
 3. **Panduan Stunting Prevensi** — strategi nasional
 4. **Jadwal Imunisasi Nasional** — IDAI recommendations
 5. **Resep MPASI Lokal** — makanan padat untuk bayi 6-12 bulan
 
+## D. Teknologi Stack
+
+| Layer | Teknologi | Version |
+|-------|-----------|---------|
+| Backend | Flask | 3.x |
+| Bot | python-telegram-bot | 21.x |
+| AI Chat | Deepseek v4-flash/pro | - |
+| Database | SQLite + aiosqlite | 3.x |
+| Frontend | React + Vite + Tailwind | React 18 |
+| Scheduler | APScheduler | 3.x |
+| Semantic Search | TF-IDF (numpy) | - |
+
 ---
 
 *Dokumen ini dibuat sebagai proposal pengembangan sistem AI-Posyandu v2.0*
-*Versi: 2.0 | Tanggal: 25 April 2026*
+*Versi: 2.0 | Tanggal: April 2026*
+*Disusun untuk: Program Gerakan Berbakti*

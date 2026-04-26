@@ -119,9 +119,16 @@ async def init_db():
                 success_count INTEGER DEFAULT 0,
                 failure_count INTEGER DEFAULT 0,
                 last_tested_at TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                embedding TEXT
             )
         """)
+        # Migration: add embedding column if upgrading from older schema
+        for col, coltype in [('embedding', 'TEXT')]:
+            try:
+                await db.execute(f'ALTER TABLE agent_lessons ADD COLUMN {col} {coltype}')
+            except Exception:
+                pass
         await db.execute("""
             CREATE TABLE IF NOT EXISTS alert_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
