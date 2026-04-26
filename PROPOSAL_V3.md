@@ -283,7 +283,7 @@ User Message → Semantic Search → Retrieve Context → Generate Response
 | API Puskesmas | Bidirectional sync dengan Faskes | High |
 | Multi-Desa | Support beberapa village dalam 1 dashboard | Medium |
 | Laporan Otomatis | Generate laporan bulanan untuk Dinas | High |
-| Mobile App | React Native untuk Kader lapangan | Low |
+| Mobile App | **(SKIP — fokus dashboard web)** | - |
 
 ## 3.2 Estimasi Biaya Operasional Bulanan
 

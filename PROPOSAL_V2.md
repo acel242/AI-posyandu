@@ -195,7 +195,7 @@ Upgrade dari keyword LIKE query ke TF-IDF/semantic embeddings untuk pencarian ya
 | Aktivitas | Deskripsi |
 |-----------|-----------|
 | Integrasi Puskesmas/Faskes | API untuk bidirectional data exchange |
-| Mobile App | React Native untuk Kader lapangan |
+| Mobile App | **(SKIP — fokus dashboard web)** |
 | Multi-Desa Scaling | Sistem support multiple villages |
 | Laporan Otomatis | Generate laporan bulanan untuk Dinas Kesehatan |
 
