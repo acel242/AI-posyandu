@@ -335,6 +335,99 @@ async def get_statistics() -> dict:
         }
 
 
+async def get_zscore_trends(months: int = 6) -> dict:
+    """
+    Get Z-score distribution trends over the last N months.
+    Returns monthly breakdown of green/yellow/red/unmeasured counts.
+    """
+    from datetime import date, timedelta
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+
+        today = date.today()
+        month_data = []
+
+        for i in range(months - 1, -1, -1):
+            # Calculate month boundaries
+            target_month = today.replace(day=1)
+            for _ in range(i):
+                # Go back i months
+                first_day = target_month.replace(day=1)
+                if target_month.month == 1:
+                    target_month = target_month.replace(year=target_month.year - 1, month=12)
+                else:
+                    target_month = target_month.replace(month=target_month.month - 1)
+
+            # Get first day of target month
+            month_start = target_month.replace(day=1)
+            if target_month.month == 12:
+                month_end = target_month.replace(year=target_month.year + 1, month=1, day=1)
+            else:
+                month_end = target_month.replace(month=target_month.month + 1, day=1)
+
+            month_label = target_month.strftime("%Y-%m")
+
+            # Count children with records in this month
+            # Use latest record for each child within the month
+            query = """
+                SELECT h.child_id, h.overall_status, h.date
+                FROM health_records h
+                INNER JOIN (
+                    SELECT child_id, MAX(date) as max_date
+                    FROM health_records
+                    WHERE date >= ? AND date < ?
+                    GROUP BY child_id
+                ) latest ON h.child_id = latest.child_id AND h.date = latest.max_date
+            """
+            cursor = await db.execute(query, (month_start.isoformat(), month_end.isoformat()))
+            records = await cursor.fetchall()
+
+            # Count by status
+            green = yellow = red = unmeasured = 0
+            for r in records:
+                status = r['overall_status'] or 'unmeasured'
+                if status == 'green':
+                    green += 1
+                elif status == 'yellow':
+                    yellow += 1
+                elif status == 'red':
+                    red += 1
+                else:
+                    unmeasured += 1
+
+            # Get total children at end of month
+            total_cur = await db.execute(
+                "SELECT COUNT(*) FROM children WHERE created_at <= ?",
+                (month_end.isoformat(),)
+            )
+            total = (await total_cur.fetchone())[0]
+
+            month_data.append({
+                "month": month_label,
+                "total": total,
+                "measured": green + yellow + red,
+                "green": green,
+                "yellow": yellow,
+                "red": red,
+                "unmeasured": unmeasured
+            })
+
+        # Calculate summary stats
+        latest = month_data[-1] if month_data else {}
+        previous = month_data[-2] if len(month_data) > 1 else {}
+
+        return {
+            "trends": month_data,
+            "current": latest,
+            "changes": {
+                "green": (latest.get("green", 0) - previous.get("green", 0)),
+                "yellow": (latest.get("yellow", 0) - previous.get("yellow", 0)),
+                "red": (latest.get("red", 0) - previous.get("red", 0)),
+            } if previous else None
+        }
+
+
 # ── Error Log & Lesson Memory ─────────────────────────────────────────────────
 
 async def log_error(telegram_id: str, error_type: str, error_message: str,

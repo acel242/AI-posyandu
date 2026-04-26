@@ -54,6 +54,23 @@ async def stats():
     return await db.get_statistics()
 
 
+@app.get("/api/trends")
+async def get_trends(months: int = 6):
+    """
+    Get Z-score distribution trends over the last N months.
+    
+    Query params:
+        months: number of months to include (default 6, max 24)
+    
+    Returns:
+        - trends: list of monthly breakdowns
+        - current: latest month summary
+        - changes: difference from previous month
+    """
+    months = min(max(1, months), 24)
+    return await db.get_zscore_trends(months)
+
+
 # ─── Children ───────────────────────────────────────────────────
 
 @app.get("/api/children")
