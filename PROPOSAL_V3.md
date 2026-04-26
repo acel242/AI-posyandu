@@ -22,7 +22,8 @@
 | **Nama Program** | AI-Posyandu Wonosobo |
 | **Jenis Program** | Platform AI Agent untuk Kesehatan Masyarakat |
 | **Lokasi Implementasi** | Desa Patakbanteng, Kecamatan Kejajar, Kabupaten Wonosobo, Jawa Tengah |
-| **Durasi Program** | 4 Bulan (Pilot) |
+| **Pelaksanaan Program** | 8 Juli - 6 Agustus 2026 (30 hari) |
+| **Durasi Program** | 4 Minggu (Pilot) |
 | **Penanggung Jawab** | Tim Pengembangan AI-Posyandu |
 | **Versi Dokumen** | 3.0 |
 | **Tanggal** | 25 April 2026 |
@@ -217,17 +218,12 @@ User Message → Semantic Search → Retrieve Context → Generate Response
 
 ## 2.3 Timeline Implementasi
 
-| Minggu | Aktivitas | Output |
-|--------|-----------|--------|
-| 1 | Setup environment, migrate DB | Dev environment ready |
-| 2-3 | RAG implementation, semantic search | AI chat works with data |
-| 4 | Knowledge base population | PMBA, WHO loaded |
-| 5 | Alert system + dashboard trends | Auto alerts working |
-| 6 | Kader dashboard optimization | UI/UX improvements |
-| 7 | Bidan dashboard + referral | Complete workflow |
-| 8 | Testing + bug fixes | System stable |
-| 9-12 | Pilot di Patakbanteng | Real user feedback |
-| 13-16 | Evaluation + refinement | Ready for scale |
+| Minggu | Tanggal | Aktivitas | Output |
+|--------|---------|-----------|--------|
+| 1 | 8-14 Juli 2026 | Setup environment, migrate DB, RAG implementation | Dev environment ready, AI chat works |
+| 2 | 15-21 Juli 2026 | Knowledge base population, alert system | PMBA/WHO loaded, auto alerts working |
+| 3 | 22-28 Juli 2026 | Dashboard trends, kader optimization, bidan dashboard | Complete workflow, visualization active |
+| 4 | 29 Juli - 6 Agustus 2026 | Testing, pilot evaluation, refinement, handover | System stable, ready for scale |
 
 ## 2.4 Teknologi yang Digunakan
 

@@ -21,7 +21,8 @@
 | **Nama Program** | AI-Posyandu Wonosobo v2.0 |
 | **Jenis Program** | Teknologi AI untuk Kesehatan Masyarakat |
 | **Lokasi Implementasi** | Desa Patakbanteng, Kecamatan Kejajar, Kabupaten Wonosobo, Jawa Tengah |
-| **Durasi Program** | 6 Bulan (Pilot) |
+| **Pelaksanaan Program** | 8 Juli - 6 Agustus 2026 (30 hari) |
+| **Durasi Program** | 4 Minggu (Pilot) |
 | **Penanggung Jawab** | Tim Pengembangan AI-Posyandu |
 | **Kontak** | - |
 | **Target Beneficiaries** | 50+ balita dan keluarga di Patakbanteng |
@@ -148,14 +149,12 @@ Upgrade dari keyword LIKE query ke TF-IDF/semantic embeddings untuk pencarian ya
 
 ## 2.3 Timeline Implementasi
 
-| Bulan | Aktivitas |
-|-------|-----------|
-| Bulan 1 | Semantic search + RAG implementation + Knowledge base setup |
-| Bulan 2 | Auto-alert system + Dashboard tren stunting |
-| Bulan 3 | Monitoring kinerja Kader + Integrasi Puskesmas |
-| Bulan 4 | Mobile app (React Native) + Multi-desa scaling |
-| Bulan 5 | Laporan otomatis + Optimasi + User testing |
-| Bulan 6 | Pilot evaluation + documentation + handover |
+| Minggu | Tanggal | Aktivitas | Output |
+|--------|---------|-----------|--------|
+| 1 | 8-14 Juli 2026 | Setup environment, semantic search + RAG implementation | Dev environment ready, AI chat works |
+| 2 | 15-21 Juli 2026 | Knowledge base setup, auto-alert system | PMBA/WHO loaded, auto alerts working |
+| 3 | 22-28 Juli 2026 | Dashboard tren stunting, monitoring kinerja Kader | Visualisasi Z-score aktif |
+| 4 | 29 Juli - 6 Agustus 2026 | Testing, pilot evaluation, handover | Sistem siap beroperasi, dokumentasi lengkap |
 
 ## 2.4 Teknologi yang Digunakan
 
